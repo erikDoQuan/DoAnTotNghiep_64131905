@@ -10,32 +10,31 @@ module.exports = {
     theme: {
         extend: {
             colors: {
-                // Màu chủ đạo cho Health App (Xanh Teal/Mint)
-                primary: {
-                    light: '#5EEAD4',
-                    DEFAULT: '#2DD4BF',
-                    dark: '#0F766E',
+                brand: {
+                    primary: '#EFFF3B', // Vàng Neon (Màu nhấn chính)
+                    secondary: '#0a0a0a', // Đen nền
+                    tertiary: '#1c1c1c', // Xám nền input/card
                 },
-                // Màu bổ trợ cho Vận động/Calo (Cam/Vàng)
-                secondary: {
-                    light: '#FDBA74',
-                    DEFAULT: '#FB923C',
-                    dark: '#EA580C',
+                text: {
+                    primary: '#FFFFFF', // Trắng cho tiêu đề/văn bản chuẩn
+                    secondary: '#666666', // Xám nhạt cho icon/văn bản phụ
+                    muted: '#999999', // Xám khi unchecked hay bị làm mờ
                 },
-                // Màu trạng thái sức khỏe (Dùng cho BMI/Cảnh báo)
-                success: '#4ADE80', // Xanh lá - Bình thường
-                warning: '#FACC15', // Vàng - Thừa cân
-                danger: '#F87171',  // Đỏ - Béo phì
-                info: '#38BDF8',    // Xanh dương - Nước/Giấc ngủ
-
-                // Màu nền trung tính
-                background: '#F8FAFC',
-                surface: '#FFFFFF',
-                textMain: '#1E293B',
+                border: {
+                    default: '#333333', // Viền thẻ/input
+                    focus: '#EFFF3B', // Viền khi focus (Trùng màu primary)
+                },
+                status: {
+                    success: '#4ADE80',
+                    warning: '#FACC15',
+                    danger: '#F87171',
+                    info: '#38BDF8',
+                },
             },
             borderRadius: {
                 'xl': '1rem',
                 '2xl': '1.5rem',
+                '3xl': '1.875rem', 
             }
         },
     },
