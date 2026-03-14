@@ -1,6 +1,6 @@
 /** @type {import('tailwindcss').Config} */
 module.exports = {
-  presets: [require("nativewind/preset")],
+    presets: [require("nativewind/preset")],
     content: [
         "./App.{js,jsx,ts,tsx}", // Đảm bảo có cả file App ở gốc
         "./app/**/*.{js,jsx,ts,tsx}",
@@ -30,11 +30,21 @@ module.exports = {
                     danger: '#F87171',
                     info: '#38BDF8',
                 },
+                dashboard: {
+                    bg: '#FAFAFA',
+                    card: '#FFFFFF',
+                    accent: {
+                        green: '#DDF7A1',
+                        progress: '#98E332',
+                        orange: '#FF914D',
+                        blue: '#38BDF8',
+                    }
+                }
             },
             borderRadius: {
                 'xl': '1rem',
                 '2xl': '1.5rem',
-                '3xl': '1.875rem', 
+                '3xl': '1.875rem',
             }
         },
     },

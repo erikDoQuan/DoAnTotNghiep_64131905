@@ -1,9 +1,9 @@
-import '../global.css';
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import 'react-native-reanimated';
 import { useEffect } from 'react';
+import 'react-native-reanimated';
+import '../global.css';
 
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { AuthProvider, useAuth } from '../contexts/AuthContext';
@@ -32,24 +32,27 @@ function RootLayoutNav() {
         router.replace('/auth/auth_screen');
       }
     } else {
-      const isProfileComplete = profile?.height && profile?.weight;
+      const isProfileComplete = profile?.height_cm && profile?.weight_kg;
 
       if (!isProfileComplete && !inOnboardingGroup) {
         router.replace('/onboarding/onboarding_screen');
       } else if (isProfileComplete && (inAuthGroup || inOnboardingGroup)) {
-        router.replace('/(tabs)/dashboard');
+        router.replace('/dashboard');
       }
     }
   }, [session, profile, isLoading, segments]);
 
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Stack>
-        <Stack.Screen name="splash_screen" options={{ headerShown: false }} />
-        <Stack.Screen name="auth/auth_screen" options={{ headerShown: false }} />
-        <Stack.Screen name="onboarding/onboarding_screen" options={{ headerShown: false }} />
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
+      <Stack screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="splash_screen" />
+        <Stack.Screen name="auth/auth_screen" />
+        <Stack.Screen name="onboarding/onboarding_screen" />
+        <Stack.Screen name="profile" />
+        <Stack.Screen name="add-food" />
+        <Stack.Screen name="food-detail" />
+        <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal', headerShown: true }} />
       </Stack>
       <StatusBar style="auto" />
     </ThemeProvider>

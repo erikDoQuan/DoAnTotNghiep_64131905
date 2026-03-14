@@ -5,9 +5,12 @@ import { supabase } from '../supabase/supabaseClient';
 type Profile = {
   id: string;
   email: string;
-  name: string;
-  height: number | null;
-  weight: number | null;
+  name: string; // This might be deprecated soon in favor of full_name
+  full_name: string | null;
+  gender: string | null;
+  birth_date: string | null;
+  height_cm: number | null;
+  weight_kg: number | null;
 };
 
 type AuthContextType = {
@@ -66,44 +69,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const signIn = async (email: string, password: string) => {
-    const result = await supabase.auth.signInWithPassword({ email, password });
-    
-    // DEVELOPMENT BYPASS: If specific hardcoded credentials are used and Supabase fails (e.g. Email not confirmed)
-    if (result.error && email === 'docaominhquan@gmail.com' && password === 'Minhquan-2004!') {
-      console.log(">>> [DEV BYPASS] Supabase failed, but credentials match hardcoded account. Forcing session.");
-      
-      const mockUser: User = {
-        id: 'dev-bypass-id',
-        email: 'docaominhquan@gmail.com',
-        app_metadata: {},
-        user_metadata: { name: 'Admin/Dev' },
-        aud: 'authenticated',
-        created_at: new Date().toISOString(),
-      };
-
-      const mockSession: Session = {
-        access_token: 'mock-token',
-        refresh_token: 'mock-refresh',
-        expires_in: 3600,
-        token_type: 'bearer',
-        user: mockUser,
-      };
-
-      setSession(mockSession);
-      setUser(mockUser);
-      // Set a mock profile
-      setProfile({
-        id: 'dev-bypass-id',
-        email: 'docaominhquan@gmail.com',
-        name: 'Admin/Dev',
-        height: 175, // Pre-filled to skip onboarding too
-        weight: 70,
-      });
-      
-      return { error: null, data: { session: mockSession, user: mockUser } };
-    }
-
-    return result;
+    return await supabase.auth.signInWithPassword({ email, password });
   };
 
   const signUp = async (email: string, password: string, name: string) => {
