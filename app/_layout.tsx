@@ -1,5 +1,5 @@
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
-import { Stack, useRouter, useSegments } from 'expo-router';
+import { Stack, useRouter, useSegments, useRootNavigationState } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import 'react-native-reanimated';
@@ -12,14 +12,14 @@ export const unstable_settings = {
   anchor: '(tabs)',
 };
 
-function RootLayoutNav() {
-  const colorScheme = useColorScheme();
+function RedirectHandler() {
   const { session, profile, isLoading } = useAuth();
   const segments = useSegments();
   const router = useRouter();
+  const rootNavigationState = useRootNavigationState();
 
   useEffect(() => {
-    if (isLoading) return;
+    if (isLoading || !rootNavigationState?.key || (segments as any).length === 0) return;
 
     const inAuthGroup = segments[0] === 'auth';
     const isSplashScreen = segments[0] === 'splash_screen';
@@ -37,13 +37,20 @@ function RootLayoutNav() {
       if (!isProfileComplete && !inOnboardingGroup) {
         router.replace('/onboarding/onboarding_screen');
       } else if (isProfileComplete && (inAuthGroup || inOnboardingGroup)) {
-        router.replace('/dashboard');
+        router.replace('/(tabs)/dashboard');
       }
     }
-  }, [session, profile, isLoading, segments]);
+  }, [session, profile, isLoading, segments, rootNavigationState?.key]);
+
+  return null;
+}
+
+function RootLayoutNav() {
+  const colorScheme = useColorScheme();
 
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+      <RedirectHandler />
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="splash_screen" />
         <Stack.Screen name="auth/auth_screen" />

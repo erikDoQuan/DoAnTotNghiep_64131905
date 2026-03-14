@@ -1,9 +1,11 @@
+import { FOOD_CATEGORIES } from '@/constants/categories';
 import { supabase } from '@/supabase/supabaseClient';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, SafeAreaView, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 interface FoodItem {
   id: number;
@@ -22,6 +24,7 @@ export default function AddFoodScreen() {
   const [foods, setFoods] = useState<FoodItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [activeTab, setActiveTab] = useState('FOOD');
+  const [selectedCategory, setSelectedCategory] = useState<number>(1);
 
   const today = new Date();
   const dateString = today.toLocaleDateString('en-US', {
@@ -30,19 +33,20 @@ export default function AddFoodScreen() {
     day: 'numeric'
   });
 
-  const searchFoods = useCallback(async (query: string) => {
-    if (!query.trim()) {
-      setFoods([]);
-      return;
-    }
-
+  const searchFoods = useCallback(async (query: string, categoryId: number | null) => {
     setIsLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('foods')
-        .select('*')
-        .ilike('food_name', `%${query}%`)
-        .limit(20);
+      let queryBuilder = supabase.from('foods').select('*');
+
+      if (query.trim()) {
+        queryBuilder = queryBuilder.ilike('food_name', `%${query}%`);
+      }
+      
+      if (categoryId !== null) {
+        queryBuilder = queryBuilder.eq('category_id', categoryId);
+      }
+
+      const { data, error } = await queryBuilder.limit(20);
 
       if (error) throw error;
       setFoods(data || []);
@@ -55,11 +59,11 @@ export default function AddFoodScreen() {
 
   useEffect(() => {
     const timer = setTimeout(() => {
-      searchFoods(searchQuery);
+      searchFoods(searchQuery, selectedCategory);
     }, 500);
 
     return () => clearTimeout(timer);
-  }, [searchQuery, searchFoods]);
+  }, [searchQuery, selectedCategory, searchFoods]);
 
   return (
     <SafeAreaView className="flex-1 bg-dashboard-bg">
@@ -110,6 +114,41 @@ export default function AddFoodScreen() {
           />
           {isLoading && <ActivityIndicator size="small" color="#98E332" />}
         </View>
+      </View>
+
+      {/* Categories */}
+      <View>
+        <ScrollView 
+          horizontal 
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{ paddingHorizontal: 24, paddingVertical: 8, gap: 10 }}
+          className="mb-2"
+        >
+          {FOOD_CATEGORIES.map((cat) => (
+            <TouchableOpacity
+              key={cat.id}
+              onPress={() => setSelectedCategory(cat.id)}
+              style={{
+                paddingHorizontal: 24,
+                paddingVertical: 10,
+                borderRadius: 999,
+                borderWidth: 1,
+                borderColor: selectedCategory === cat.id ? 'black' : '#E5E7EB',
+                backgroundColor: selectedCategory === cat.id ? 'black' : 'white',
+                marginRight: 10,
+                elevation: 2
+              }}
+            >
+              <Text style={{
+                fontWeight: 'bold',
+                fontSize: 14,
+                color: selectedCategory === cat.id ? '#98E332' : '#6B7280'
+              }}>
+                {cat.name}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
       </View>
 
       {/* Food List */}

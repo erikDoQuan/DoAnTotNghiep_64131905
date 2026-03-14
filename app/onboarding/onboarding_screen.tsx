@@ -1,18 +1,16 @@
-import { useState } from 'react';
-import { 
-  View, 
-  Text, 
-  SafeAreaView, 
-  KeyboardAvoidingView, 
-  Platform, 
-  ScrollView, 
-  Alert, 
-  TouchableOpacity 
-} from 'react-native';
-import { StatusBar } from 'expo-status-bar';
-import { useRouter } from 'expo-router';
-import { AppTextInput } from '@/components/ui/Input';
 import { AppButton } from '@/components/ui/Button';
+import { AppTextInput } from '@/components/ui/Input';
+import { StatusBar } from 'expo-status-bar';
+import { useState } from 'react';
+import {
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  Text,
+  TouchableOpacity,
+  View
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../supabase/supabaseClient';
 
@@ -28,7 +26,7 @@ export default function OnboardingScreen() {
 
   const handleFinishSetup = async () => {
     setErrorMsg('');
-    
+
     const heightNum = parseFloat(height);
     const weightNum = parseFloat(weight);
 
@@ -83,7 +81,7 @@ export default function OnboardingScreen() {
   };
 
   const GenderOption = ({ label, value }: { label: string, value: string }) => (
-    <TouchableOpacity 
+    <TouchableOpacity
       onPress={() => setGender(value)}
       className={`flex-1 py-4 rounded-[20px] items-center justify-center border ${gender === value ? 'bg-brand-primary border-brand-primary' : 'bg-brand-tertiary border-border-default'}`}
     >
@@ -94,12 +92,12 @@ export default function OnboardingScreen() {
   return (
     <SafeAreaView className="flex-1 bg-brand-secondary">
       <StatusBar style="light" />
-      <KeyboardAvoidingView 
+      <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         className="flex-1"
       >
         <ScrollView contentContainerStyle={{ flexGrow: 1 }} className="px-6 py-12">
-          
+
           <View className="mb-10 items-center">
             <Text className="text-brand-primary text-4xl font-bold mb-2">Welcome!</Text>
             <Text className="text-text-secondary text-center text-lg">
@@ -168,9 +166,9 @@ export default function OnboardingScreen() {
             ) : null}
           </View>
 
-          <AppButton 
-            title="Finish Setup" 
-            onPress={handleFinishSetup} 
+          <AppButton
+            title="Finish Setup"
+            onPress={handleFinishSetup}
             isLoading={isLoading}
             className="mt-2 mb-10"
           />

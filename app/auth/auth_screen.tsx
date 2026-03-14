@@ -1,9 +1,10 @@
-import { useState } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, SafeAreaView, KeyboardAvoidingView, Platform, Alert } from 'react-native';
+import { AppButton } from '@/components/ui/Button';
+import { AppTextInput } from '@/components/ui/Input';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
-import { AppTextInput } from '@/components/ui/Input';
-import { AppButton } from '@/components/ui/Button';
+import { useState } from 'react';
+import { Alert, KeyboardAvoidingView, Platform, ScrollView, Text, TouchableOpacity, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../../contexts/AuthContext';
 
 export default function AuthScreen() {
@@ -60,12 +61,12 @@ export default function AuthScreen() {
   return (
     <SafeAreaView className="flex-1 bg-brand-secondary">
       <StatusBar style="light" />
-      <KeyboardAvoidingView 
+      <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         className="flex-1"
       >
         <ScrollView contentContainerStyle={{ flexGrow: 1 }} className="px-6 pt-12 pb-8">
-          
+
           {/* Header Text */}
           <View className="mb-8 items-center">
             <Text className="text-text-primary text-3xl font-bold text-center">
@@ -75,7 +76,7 @@ export default function AuthScreen() {
 
           {/* Toggle Tab */}
           <View className="flex-row bg-brand-tertiary rounded-full p-1 mb-8">
-            <TouchableOpacity 
+            <TouchableOpacity
               className={`flex-1 py-3 rounded-full ${isLogin ? 'bg-border-default' : 'bg-transparent'}`}
               onPress={() => {
                 setIsLogin(true);
@@ -84,7 +85,7 @@ export default function AuthScreen() {
             >
               <Text className={`text-center font-medium ${isLogin ? 'text-text-primary' : 'text-text-secondary'}`}>Log in</Text>
             </TouchableOpacity>
-            <TouchableOpacity 
+            <TouchableOpacity
               className={`flex-1 py-3 rounded-full ${!isLogin ? 'bg-border-default' : 'bg-transparent'}`}
               onPress={() => {
                 setIsLogin(false);
@@ -144,7 +145,7 @@ export default function AuthScreen() {
 
           {/* Options Row */}
           <View className="flex-row justify-between items-center mb-8">
-            <TouchableOpacity 
+            <TouchableOpacity
               className="flex-row items-center"
               onPress={() => setRememberMe(!rememberMe)}
               disabled={isLoading}
@@ -163,9 +164,9 @@ export default function AuthScreen() {
           </View>
 
           {/* Primary Action Button */}
-          <AppButton 
-            title={isLogin ? 'Login' : 'Sign up'} 
-            onPress={handleAuth} 
+          <AppButton
+            title={isLogin ? 'Login' : 'Sign up'}
+            onPress={handleAuth}
             isLoading={isLoading}
             className="mb-8"
           />
@@ -183,7 +184,7 @@ export default function AuthScreen() {
                 <MaterialCommunityIcons name="google" size={20} color="#EA4335" />
                 <Text className="text-text-primary ml-2 font-medium">Google</Text>
               </TouchableOpacity>
-              
+
               <TouchableOpacity disabled={isLoading} className="flex-1 flex-row items-center justify-center border border-border-default py-4 rounded-3xl px-2 mb-4 mx-2">
                 <MaterialCommunityIcons name="apple" size={20} color="#FFFFFF" />
                 <Text className="text-text-primary ml-2 font-medium">Apple</Text>
@@ -196,7 +197,7 @@ export default function AuthScreen() {
             <Text className="text-text-secondary">
               {isLogin ? "Dont have an account ? " : "Already have an account? "}
             </Text>
-            <TouchableOpacity 
+            <TouchableOpacity
               onPress={() => {
                 setIsLogin(!isLogin);
                 setErrorMsg('');
