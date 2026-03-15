@@ -5,11 +5,16 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
+    "notification": {
+      "icon": "./assets/images/icon.png",
+      "color": "#EFFF3B"
+    },
     "scheme": "doantotnghiep64131905",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.anonymous.LifeTrack"
     },
     "android": {
       "adaptiveIcon": {

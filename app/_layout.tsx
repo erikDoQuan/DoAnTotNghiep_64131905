@@ -7,6 +7,9 @@ import '../global.css';
 
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { AuthProvider, useAuth } from '../contexts/AuthContext';
+import { registerForPushNotificationsAsync, scheduleWaterReminders } from '../utils/notificationHelper';
+import * as Notifications from 'expo-notifications';
+import { useRef } from 'react';
 
 export const unstable_settings = {
   anchor: '(tabs)',
@@ -47,6 +50,30 @@ function RedirectHandler() {
 
 function RootLayoutNav() {
   const colorScheme = useColorScheme();
+  const notificationListener = useRef<Notifications.Subscription | undefined>(undefined);
+  const responseListener = useRef<Notifications.Subscription | undefined>(undefined);
+
+  useEffect(() => {
+    // 1. Xin quyền & Lập lịch nhắc nước khi app mở
+    registerForPushNotificationsAsync().then(() => {
+      scheduleWaterReminders();
+    });
+
+    // 2. Lắng nghe notification khi app đang mở
+    notificationListener.current = Notifications.addNotificationReceivedListener(notification => {
+      console.log('Notification Received:', notification);
+    });
+
+    // 3. Lắng nghe khi người dùng tương tác với notification
+    responseListener.current = Notifications.addNotificationResponseReceivedListener(response => {
+      console.log('Notification Response:', response);
+    });
+
+    return () => {
+      notificationListener.current?.remove();
+      responseListener.current?.remove();
+    };
+  }, []);
 
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
@@ -58,6 +85,9 @@ function RootLayoutNav() {
         <Stack.Screen name="profile" />
         <Stack.Screen name="add-food" />
         <Stack.Screen name="food-detail" />
+        <Stack.Screen name="weight-details" options={{ headerShown: false }} />
+        <Stack.Screen name="set-weight-goal" options={{ headerShown: false }} />
+        <Stack.Screen name="steps-details" options={{ headerShown: false }} />
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal', headerShown: true }} />
       </Stack>

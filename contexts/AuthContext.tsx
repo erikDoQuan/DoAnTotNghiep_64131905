@@ -11,6 +11,7 @@ type Profile = {
   birth_date: string | null;
   height_cm: number | null;
   weight_kg: number | null;
+  move_goal_kcal: number | null;
 };
 
 type AuthContextType = {

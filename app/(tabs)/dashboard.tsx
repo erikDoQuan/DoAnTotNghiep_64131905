@@ -4,7 +4,9 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Image, ScrollView, Text, TouchableOpacity, View } from 'react-native';
+import { Pedometer } from 'expo-sensors';
+import { testNotification } from '../../utils/notificationHelper';
+import { Alert, ActivityIndicator, Image, Modal, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 interface MealRecord {
@@ -23,12 +25,165 @@ interface MealRecord {
   };
 }
 
+const WATER_SCHEDULE = [
+  { hour: 7, minute: 0 },
+  { hour: 9, minute: 0 },
+  { hour: 11, minute: 30 },
+  { hour: 13, minute: 30 },
+  { hour: 15, minute: 50 },
+  { hour: 17, minute: 30 },
+  { hour: 19, minute: 30 },
+  { hour: 21, minute: 30 },
+];
+
 export default function DashboardScreen() {
   const { user, profile, signOut } = useAuth();
   const router = useRouter();
+  const [now, setNow] = useState(new Date());
   const [isMounted, setIsMounted] = useState(false);
   const [meals, setMeals] = useState<MealRecord[]>([]);
   const [selectedDate, setSelectedDate] = useState(new Date());
+  const [stepsToday, setStepsToday] = useState(0);
+  const [lastSyncedSteps, setLastSyncedSteps] = useState(0);
+  const [isAvatarModalVisible, setIsAvatarModalVisible] = useState(false);
+
+  // Update current time every minute to refresh water intake
+  useEffect(() => {
+    const timer = setInterval(() => setNow(new Date()), 60000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const syncStepData = useCallback(async (steps: number) => {
+    if (!user || steps <= lastSyncedSteps) return;
+    
+    try {
+      const startOfDay = new Date();
+      startOfDay.setHours(0, 0, 0, 0);
+      const endOfDay = new Date();
+      endOfDay.setHours(23, 59, 59, 999);
+
+      // Data calculations
+      const height = profile?.height_cm || 170;
+      const weight = profile?.weight_kg || 70;
+      const gender = profile?.gender?.toLowerCase() || 'male';
+      const stepLengthCm = gender === 'male' ? height * 0.415 : height * 0.413;
+      const distanceKm = (steps * stepLengthCm) / 100000;
+      const caloriesBurned = weight * distanceKm * 0.75;
+
+      const { data: existing } = await supabase
+        .from('step_records')
+        .select('id')
+        .eq('user_id', user.id)
+        .gte('created_at', startOfDay.toISOString())
+        .lte('created_at', endOfDay.toISOString())
+        .maybeSingle();
+
+      if (existing) {
+        await supabase
+          .from('step_records')
+          .update({
+            steps: steps,
+            distance_km: parseFloat(distanceKm.toFixed(2)),
+            calories_burned: Math.round(caloriesBurned),
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', existing.id);
+      } else {
+        await supabase
+          .from('step_records')
+          .insert({
+            user_id: user.id,
+            steps: steps,
+            distance_km: parseFloat(distanceKm.toFixed(2)),
+            calories_burned: Math.round(caloriesBurned),
+            created_at: new Date().toISOString()
+          });
+      }
+      setLastSyncedSteps(steps);
+    } catch (e) {
+      console.error('Dashboard: Sync error:', e);
+    }
+  }, [user, profile, lastSyncedSteps]);
+
+  // Sync steps in real-time
+  useEffect(() => {
+    let subscription: { remove: () => void } | null = null;
+
+    const subscribeSteps = async () => {
+      const isAvailable = await Pedometer.isAvailableAsync();
+      if (isAvailable) {
+        const start = new Date();
+        start.setHours(0, 0, 0, 0);
+        const end = new Date();
+        
+        try {
+          if (user) {
+            const startOfDay = new Date();
+            startOfDay.setHours(0, 0, 0, 0);
+            const endOfDay = new Date();
+            endOfDay.setHours(23, 59, 59, 999);
+
+            const { data: dbData } = await supabase
+              .from('step_records')
+              .select('steps')
+              .eq('user_id', user.id)
+              .gte('created_at', startOfDay.toISOString())
+              .lte('created_at', endOfDay.toISOString())
+              .order('created_at', { ascending: false })
+              .limit(1)
+              .maybeSingle();
+            
+            if (dbData) {
+              setStepsToday(dbData.steps);
+              setLastSyncedSteps(dbData.steps);
+            }
+          }
+
+          const pastResult = await Pedometer.getStepCountAsync(start, end);
+          if (pastResult) {
+            setStepsToday(prev => Math.max(prev, pastResult.steps));
+          }
+        } catch (e) {
+          console.error('Error getting past steps:', e);
+        }
+
+        subscription = Pedometer.watchStepCount((result) => {
+          // Re-fetch total when count changes significantly
+          // For Dashboard we mostly rely on the interval and initial fetch
+        });
+      }
+    };
+
+    subscribeSteps();
+    const stepInterval = setInterval(subscribeSteps, 30000);
+
+    return () => {
+      if (subscription) subscription.remove();
+      clearInterval(stepInterval);
+    };
+  }, [user]);
+
+  // Trigger sync in Dashboard
+  useEffect(() => {
+    if (stepsToday > lastSyncedSteps + 0) {
+      syncStepData(stepsToday);
+    }
+  }, [stepsToday, lastSyncedSteps, syncStepData]);
+
+  const calculateWaterIntake = () => {
+    const todayMoment = new Date();
+    todayMoment.setHours(0, 0, 0, 0);
+    
+    const selectedMoment = new Date(selectedDate);
+    selectedMoment.setHours(0, 0, 0, 0);
+    
+    if (selectedMoment.getTime() < todayMoment.getTime()) return 8; 
+    if (selectedMoment.getTime() > todayMoment.getTime()) return 0;
+
+    // Ngày hiện tại: tính theo giờ thực tế
+    const currentTime = now.getHours() * 60 + now.getMinutes();
+    return WATER_SCHEDULE.filter(t => (t.hour * 60 + t.minute) <= currentTime).length;
+  };
   const [isLoadingMeals, setIsLoadingMeals] = useState(true);
   const [currentWeekBase, setCurrentWeekBase] = useState(() => {
     const d = new Date();
@@ -78,6 +233,20 @@ export default function DashboardScreen() {
   const bmi = (profile?.height_cm && profile?.weight_kg)
     ? (profile.weight_kg / Math.pow(profile.height_cm / 100, 2)).toFixed(1)
     : '0.0';
+
+  const getBMIStatus = (bmiValue: number) => {
+    if (bmiValue === 0) return 'No Data';
+    if (bmiValue < 16) return 'Severe Thinness (Grade III)';
+    if (bmiValue < 17) return 'Moderate Thinness (Grade II)';
+    if (bmiValue < 18.5) return 'Mild Thinness (Grade I)';
+    if (bmiValue < 25) return 'Normal Weight';
+    if (bmiValue < 30) return 'Overweight';
+    if (bmiValue < 35) return 'Obesity Class I';
+    if (bmiValue < 40) return 'Obesity Class II';
+    return 'Obesity Class III';
+  };
+
+  const bmiStatus = getBMIStatus(Number(bmi));
 
   // Group meals and calculate totals
   const getMealSummary = (type: string) => {
@@ -150,6 +319,21 @@ export default function DashboardScreen() {
     );
   }
 
+  const handleAvatarPress = () => {
+    setIsAvatarModalVisible(true);
+  };
+
+  const handleLogout = async () => {
+    setIsAvatarModalVisible(false);
+    await signOut();
+    router.replace('/auth/auth_screen');
+  };
+
+  const handleViewProfile = () => {
+    setIsAvatarModalVisible(false);
+    router.push('/profile');
+  };
+
   return (
     <SafeAreaView className="flex-1 bg-dashboard-bg">
       <StatusBar style="dark" />
@@ -159,7 +343,7 @@ export default function DashboardScreen() {
         <View className="flex-row justify-between items-center mb-6">
           <View className="flex-row items-center">
             <TouchableOpacity
-              onPress={() => router.push('/profile')}
+              onPress={handleAvatarPress}
               className="w-12 h-12 rounded-full bg-gray-200 overflow-hidden mr-3 shadow-sm border-2 border-white"
             >
               <Image
@@ -173,19 +357,25 @@ export default function DashboardScreen() {
             </View>
           </View>
           <View className="flex-row items-center">
-            <TouchableOpacity className="w-10 h-10 rounded-xl bg-white items-center justify-center shadow-sm mr-2">
+            <TouchableOpacity 
+              onPress={() => testNotification()}
+              className="w-10 h-10 rounded-xl bg-status-info/10 items-center justify-center shadow-sm mr-2"
+            >
+              <MaterialCommunityIcons name="bell-ring-outline" size={20} color="#38BDF8" />
+            </TouchableOpacity>
+            <TouchableOpacity className="w-10 h-10 rounded-xl bg-dashboard-card items-center justify-center shadow-sm mr-2">
               <MaterialCommunityIcons name="calendar-month-outline" size={20} color="black" />
             </TouchableOpacity>
-            <TouchableOpacity className="w-10 h-10 rounded-xl bg-white items-center justify-center shadow-sm relative">
+            <TouchableOpacity className="w-10 h-10 rounded-xl bg-dashboard-card items-center justify-center shadow-sm relative">
               <MaterialCommunityIcons name="bell-outline" size={20} color="black" />
-              <View className="absolute top-2 right-2 w-2 h-2 bg-green-500 rounded-full border-2 border-white" />
+              <View className="absolute top-2 right-2 w-2 h-2 bg-status-success rounded-full border-2 border-white" />
             </TouchableOpacity>
           </View>
         </View>
 
 
         {/* Weekly Progress Card */}
-        <TouchableOpacity className="bg-dashboard-accent-green rounded-[32px] p-6 mb-4 flex-row justify-between items-center">
+        <TouchableOpacity className="bg-dashboard-accent-green rounded-3xl p-6 mb-4 flex-row justify-between items-center">
           <View className="flex-1 pr-4">
             <View className="flex-row items-center mb-1">
               <View className="w-6 h-6 rounded-full bg-white/40 items-center justify-center mr-2">
@@ -209,60 +399,107 @@ export default function DashboardScreen() {
 
         {/* Status Grid */}
         <View className="flex-row justify-between mb-6">
-          <View className="w-[48%] bg-white rounded-[24px] p-4 shadow-sm">
+          <TouchableOpacity 
+            onPress={() => router.push('/steps-details')}
+            className="w-[48%] bg-dashboard-card rounded-2xl p-4 shadow-sm"
+          >
             <View className="flex-row justify-between items-center mb-4">
               <Text className="text-black text-sm font-semibold">Step to{"\n"}walk</Text>
-              <View className="w-10 h-10 rounded-full bg-[#FFF1E6] items-center justify-center">
+              <View className="w-10 h-10 rounded-full bg-dashboard-accent-orange/10 items-center justify-center">
                 <MaterialCommunityIcons name="walk" size={20} color="#FF914D" />
               </View>
             </View>
             <View className="flex-row items-baseline">
-              <Text className="text-black text-xl font-bold">5,500</Text>
-              <Text className="text-gray-400 text-xs ml-1 font-medium">steps</Text>
+              <Text className="text-black text-xl font-bold">{stepsToday.toLocaleString()}</Text>
+              <Text className="text-text-secondary text-xs ml-1 font-medium">steps</Text>
             </View>
-          </View>
+          </TouchableOpacity>
 
-          <View className="w-[48%] bg-white rounded-[24px] p-4 shadow-sm">
+          <View className="w-[48%] bg-dashboard-card rounded-2xl p-4 shadow-sm">
             <View className="flex-row justify-between items-center mb-4">
               <Text className="text-black text-sm font-semibold">Drink{"\n"}Water</Text>
-              <View className="w-10 h-10 rounded-full bg-[#E0F2FE] items-center justify-center">
+              <View className="w-10 h-10 rounded-full bg-dashboard-accent-blue/10 items-center justify-center">
                 <MaterialCommunityIcons name="water" size={20} color="#38BDF8" />
               </View>
             </View>
             <View className="flex-row items-baseline">
-              <Text className="text-black text-xl font-bold">12</Text>
-              <Text className="text-gray-400 text-xs ml-1 font-medium">glass</Text>
+              <Text className="text-black text-xl font-bold">{calculateWaterIntake()}/8</Text>
+              <Text className="text-text-secondary text-xs ml-1 font-medium">glass</Text>
             </View>
           </View>
         </View>
 
+        {/* Avatar Options Modal */}
+        <Modal
+          visible={isAvatarModalVisible}
+          transparent={true}
+          animationType="fade"
+          onRequestClose={() => setIsAvatarModalVisible(false)}
+        >
+          <TouchableOpacity 
+            className="flex-1 bg-black/60 justify-end"
+            activeOpacity={1}
+            onPress={() => setIsAvatarModalVisible(false)}
+          >
+            <View className="bg-brand-tertiary rounded-t-3xl p-6 pb-12 border-t border-white/5">
+              <View className="w-12 h-1 bg-white/10 rounded-full self-center mb-6" />
+              
+              <Text className="text-white text-xl font-bold mb-6 px-2">Tài khoản</Text>
+
+              <TouchableOpacity 
+                onPress={handleViewProfile}
+                className="flex-row items-center bg-white/5 p-4 rounded-2xl mb-3"
+              >
+                <View className="w-10 h-10 rounded-full bg-brand-primary/10 items-center justify-center mr-4">
+                  <MaterialCommunityIcons name="account-circle-outline" size={24} color="#EFFF3B" />
+                </View>
+                <Text className="text-white text-lg font-medium">Xem hồ sơ</Text>
+                <MaterialCommunityIcons name="chevron-right" size={24} color="#666" className="ml-auto" />
+              </TouchableOpacity>
+
+              <TouchableOpacity 
+                onPress={handleLogout}
+                className="flex-row items-center bg-status-danger/10 p-4 rounded-2xl"
+              >
+                <View className="w-10 h-10 rounded-full bg-status-danger/20 items-center justify-center mr-4">
+                  <MaterialCommunityIcons name="logout" size={22} color="#F87171" />
+                </View>
+                <Text className="text-status-danger text-lg font-medium">Đăng xuất</Text>
+              </TouchableOpacity>
+            </View>
+          </TouchableOpacity>
+        </Modal>
+
         {/* Second Row of Status Grid */}
         <View className="flex-row justify-between mb-6">
-          <View className="w-[48%] bg-white rounded-[24px] p-4 shadow-sm">
+          <TouchableOpacity 
+            onPress={() => router.push('/weight-details')}
+            className="w-[48%] bg-dashboard-card rounded-2xl p-4 shadow-sm"
+          >
             <View className="flex-row justify-between items-center mb-4">
               <Text className="text-black text-sm font-semibold">Current{"\n"}BMI</Text>
-              <View className="w-10 h-10 rounded-full bg-[#F0FDF4] items-center justify-center">
+              <View className="w-10 h-10 rounded-full bg-status-success/10 items-center justify-center">
                 <MaterialCommunityIcons name="scale-bathroom" size={20} color="#4ADE80" />
               </View>
             </View>
-            <View className="flex-row items-baseline">
+            <View>
               <Text className="text-black text-xl font-bold">{bmi}</Text>
-              <Text className="text-gray-400 text-xs ml-1 font-medium">score</Text>
+              <Text className="text-text-secondary text-[10px] font-medium mt-1" numberOfLines={1}>{bmiStatus}</Text>
             </View>
-          </View>
+          </TouchableOpacity>
 
           <View
-            className="w-[48%] bg-white rounded-[24px] p-4 shadow-sm"
+            className="w-[48%] bg-dashboard-card rounded-2xl p-4 shadow-sm"
           >
             <View className="flex-row justify-between items-center mb-4">
               <Text className="text-black text-sm font-semibold">Sleep{"\n"}Time</Text>
-              <View className="w-10 h-10 rounded-full bg-[#F5F3FF] items-center justify-center">
+              <View className="w-10 h-10 rounded-full bg-[#8B5CF6]/10 items-center justify-center">
                 <MaterialCommunityIcons name="sleep" size={20} color="#8B5CF6" />
               </View>
             </View>
             <View className="flex-row items-baseline">
               <Text className="text-black text-xl font-bold">7h 35m</Text>
-              <Text className="text-gray-400 text-xs ml-1 font-medium">total</Text>
+              <Text className="text-text-secondary text-xs ml-1 font-medium">total</Text>
             </View>
           </View>
         </View>
@@ -286,7 +523,7 @@ export default function DashboardScreen() {
               </TouchableOpacity>
             </View>
           </View>
-          <View className="bg-white rounded-[24px] py-4 shadow-sm overflow-hidden">
+          <View className="bg-dashboard-card rounded-2xl py-4 shadow-sm overflow-hidden">
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
@@ -298,7 +535,7 @@ export default function DashboardScreen() {
                   onPress={() => handleDateSelect(item.fullDate)}
                   className="items-center px-2"
                 >
-                  <Text className={`text-xs font-medium mb-2 ${item.isToday ? 'text-dashboard-accent-green' : 'text-gray-400'}`}>
+                  <Text className={`text-xs font-medium mb-2 ${item.isToday ? 'text-dashboard-accent-green' : 'text-text-secondary'}`}>
                     {item.day}
                   </Text>
                   <View className={`w-10 h-12 rounded-2xl items-center justify-center ${item.active ? 'bg-dashboard-accent-green' : ''}`}>
@@ -315,19 +552,19 @@ export default function DashboardScreen() {
         {/* Nutritional Summary Row (Daily Totals) */}
         <View className="flex-row justify-between items-center bg-white/10 rounded-2xl py-4 px-6 mb-6 border border-gray-100/50" style={{ backgroundColor: 'rgba(0,0,0,0.03)' }}>
           <View className="items-center">
-            <Text className="text-gray-500 text-[10px] mb-1">Fat</Text>
+            <Text className="text-text-secondary text-[10px] mb-1">Fat</Text>
             <Text className="text-black font-bold">{(totalFatToday || 0).toFixed(1)}</Text>
           </View>
           <View className="items-center">
-            <Text className="text-gray-500 text-[10px] mb-1">Carbs</Text>
+            <Text className="text-text-secondary text-[10px] mb-1">Carbs</Text>
             <Text className="text-black font-bold">{(totalCarbsToday || 0).toFixed(1)}</Text>
           </View>
           <View className="items-center">
-            <Text className="text-gray-500 text-[10px] mb-1">Prot</Text>
+            <Text className="text-text-secondary text-[10px] mb-1">Prot</Text>
             <Text className="text-black font-bold">{(totalProteinToday || 0).toFixed(1)}</Text>
           </View>
           <View className="items-center border-l border-gray-200 pl-4">
-            <Text className="text-gray-500 text-[10px] mb-1">Calories</Text>
+            <Text className="text-text-secondary text-[10px] mb-1">Calories</Text>
             <Text className="text-black text-xl font-black">{(totalCaloriesToday || 0).toFixed(0)}</Text>
           </View>
         </View>
@@ -335,22 +572,22 @@ export default function DashboardScreen() {
         {/* Meal Sections */}
         <View className="mb-2">
           {/* Breakfast */}
-          <View className="bg-white rounded-[24px] p-4 mb-3 shadow-sm">
+          <View className="bg-dashboard-card rounded-2xl p-4 mb-3 shadow-sm">
             <View className="flex-row justify-between items-center mb-3">
               <View>
                 <Text className="text-black text-base font-bold mb-1">Breakfast</Text>
                 <View className="flex-row items-center">
-                  <View className="w-6 h-6 rounded-md bg-[#FFFBEB] items-center justify-center mr-2">
-                    <MaterialCommunityIcons name="fire" size={14} color="#F59E0B" />
+                  <View className="w-6 h-6 rounded-md bg-dashboard-accent-orange/10 items-center justify-center mr-2">
+                    <MaterialCommunityIcons name="fire" size={14} color="#FF914D" />
                   </View>
-                  <Text className="text-gray-500 text-sm font-medium">
-                    {isLoadingMeals ? '...' : breakfastSummary.calories} <Text className="text-gray-400 text-xs">kcal</Text>
+                  <Text className="text-text-secondary text-sm font-medium">
+                    {isLoadingMeals ? '...' : breakfastSummary.calories} <Text className="text-text-muted text-xs">kcal</Text>
                   </Text>
                 </View>
                 <View className="flex-row items-center mt-2 px-1">
-                  <Text className="text-gray-400 text-[10px] mr-3">Fat: {breakfastSummary.fat}g</Text>
-                  <Text className="text-gray-400 text-[10px] mr-3">Carbs: {breakfastSummary.carbs}g</Text>
-                  <Text className="text-gray-400 text-[10px]">Prot: {breakfastSummary.protein}g</Text>
+                  <Text className="text-text-muted text-[10px] mr-3">Fat: {breakfastSummary.fat}g</Text>
+                  <Text className="text-text-muted text-[10px] mr-3">Carbs: {breakfastSummary.carbs}g</Text>
+                  <Text className="text-text-muted text-[10px]">Prot: {breakfastSummary.protein}g</Text>
                 </View>
               </View>
               <View className="flex-row items-center">
@@ -365,22 +602,22 @@ export default function DashboardScreen() {
           </View>
 
           {/* Lunch */}
-          <View className="bg-white rounded-[24px] p-4 mb-3 shadow-sm">
+          <View className="bg-dashboard-card rounded-2xl p-4 mb-3 shadow-sm">
             <View className="flex-row justify-between items-center mb-3">
               <View>
                 <Text className="text-black text-base font-bold mb-1">Lunch time</Text>
                 <View className="flex-row items-center">
-                  <View className="w-6 h-6 rounded-md bg-[#FFFBEB] items-center justify-center mr-2">
-                    <MaterialCommunityIcons name="fire" size={14} color="#F59E0B" />
+                  <View className="w-6 h-6 rounded-md bg-dashboard-accent-orange/10 items-center justify-center mr-2">
+                    <MaterialCommunityIcons name="fire" size={14} color="#FF914D" />
                   </View>
-                  <Text className="text-gray-500 text-sm font-medium">
-                    {isLoadingMeals ? '...' : lunchSummary.calories} <Text className="text-gray-400 text-xs">kcal</Text>
+                  <Text className="text-text-secondary text-sm font-medium">
+                    {isLoadingMeals ? '...' : lunchSummary.calories} <Text className="text-text-muted text-xs">kcal</Text>
                   </Text>
                 </View>
                 <View className="flex-row items-center mt-2 px-1">
-                  <Text className="text-gray-400 text-[10px] mr-3">Fat: {lunchSummary.fat}g</Text>
-                  <Text className="text-gray-400 text-[10px] mr-3">Carbs: {lunchSummary.carbs}g</Text>
-                  <Text className="text-gray-400 text-[10px]">Prot: {lunchSummary.protein}g</Text>
+                  <Text className="text-text-muted text-[10px] mr-3">Fat: {lunchSummary.fat}g</Text>
+                  <Text className="text-text-muted text-[10px] mr-3">Carbs: {lunchSummary.carbs}g</Text>
+                  <Text className="text-text-muted text-[10px]">Prot: {lunchSummary.protein}g</Text>
                 </View>
               </View>
               <View className="flex-row items-center">
@@ -395,22 +632,22 @@ export default function DashboardScreen() {
           </View>
 
           {/* Dinner */}
-          <View className="bg-white rounded-[24px] p-4 mb-3 shadow-sm">
+          <View className="bg-dashboard-card rounded-2xl p-4 mb-3 shadow-sm">
             <View className="flex-row justify-between items-center mb-3">
               <View>
                 <Text className="text-black text-base font-bold mb-1">Dinner</Text>
                 <View className="flex-row items-center">
-                  <View className="w-6 h-6 rounded-md bg-[#FFFBEB] items-center justify-center mr-2">
-                    <MaterialCommunityIcons name="fire" size={14} color="#F59E0B" />
+                  <View className="w-6 h-6 rounded-md bg-dashboard-accent-orange/10 items-center justify-center mr-2">
+                    <MaterialCommunityIcons name="fire" size={14} color="#FF914D" />
                   </View>
-                  <Text className="text-gray-500 text-sm font-medium">
-                    {isLoadingMeals ? '...' : dinnerSummary.calories} <Text className="text-gray-400 text-xs">kcal</Text>
+                  <Text className="text-text-secondary text-sm font-medium">
+                    {isLoadingMeals ? '...' : dinnerSummary.calories} <Text className="text-text-muted text-xs">kcal</Text>
                   </Text>
                 </View>
                 <View className="flex-row items-center mt-2 px-1">
-                  <Text className="text-gray-400 text-[10px] mr-3">Fat: {dinnerSummary.fat}g</Text>
-                  <Text className="text-gray-400 text-[10px] mr-3">Carbs: {dinnerSummary.carbs}g</Text>
-                  <Text className="text-gray-400 text-[10px]">Prot: {dinnerSummary.protein}g</Text>
+                  <Text className="text-text-muted text-[10px] mr-3">Fat: {dinnerSummary.fat}g</Text>
+                  <Text className="text-text-muted text-[10px] mr-3">Carbs: {dinnerSummary.carbs}g</Text>
+                  <Text className="text-text-muted text-[10px]">Prot: {dinnerSummary.protein}g</Text>
                 </View>
               </View>
               <View className="flex-row items-center">
