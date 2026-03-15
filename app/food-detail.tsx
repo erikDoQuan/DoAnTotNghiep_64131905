@@ -1,8 +1,10 @@
+import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/supabase/supabaseClient';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useMemo, useState } from 'react';
-import { ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 interface FoodItem {
@@ -18,7 +20,8 @@ interface FoodItem {
 
 export default function FoodDetailScreen() {
   const router = useRouter();
-  const { food: foodParam } = useLocalSearchParams<{ food: string }>();
+  const { user } = useAuth();
+  const { food: foodParam, meal } = useLocalSearchParams<{ food: string; meal: string }>();
 
   const food: FoodItem = useMemo(() => {
     try {
@@ -39,17 +42,54 @@ export default function FoodDetailScreen() {
 
   const [quantity, setQuantity] = useState('100');
   const [unit, setUnit] = useState('g');
+  const [isSaving, setIsSaving] = useState(false);
 
   const qNum = parseFloat(quantity) || 0;
   const baseNum = parseFloat(food.unit_base) || 100;
   const ratio = qNum / baseNum;
 
   const calculated = {
-    calories: (food.calories_kcal * ratio).toFixed(0),
+    calories: (food.calories_kcal * ratio).toFixed(1),
     energy_kj: (food.energy_kj * ratio).toFixed(0),
     protein: (food.protein * ratio).toFixed(1),
-    carbs: (food.carbs * ratio).toFixed(0),
+    carbs: (food.carbs * ratio).toFixed(1),
     fat: (food.fat * ratio).toFixed(1),
+  };
+
+  const handleSave = async () => {
+    if (!user) {
+      Alert.alert('Error', 'You must be logged in to save meals.');
+      return;
+    }
+
+    if (qNum <= 0) {
+      Alert.alert('Error', 'Please enter a valid quantity.');
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      const { error } = await supabase.from('meals').insert({
+        user_id: user.id,
+        food_id: food.id,
+        meal_type: meal?.toLowerCase() || 'breakfast',
+        portion_grams: qNum,
+        calories: parseFloat(calculated.calories),
+        protein: parseFloat(calculated.protein),
+        carbs: parseFloat(calculated.carbs),
+        fat: parseFloat(calculated.fat),
+      });
+
+      if (error) throw error;
+
+      Alert.alert('Success', 'Meal recorded successfully!');
+      router.replace('/(tabs)/dashboard');
+    } catch (error: any) {
+      console.error('Error saving meal:', error);
+      Alert.alert('Error', error.message || 'Failed to save meal.');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -83,8 +123,14 @@ export default function FoodDetailScreen() {
             <Text className="flex-1 text-white text-lg font-medium ml-3">{unit}</Text>
           </View>
 
-          <TouchableOpacity className="bg-[#22C55E] rounded-xl py-4 mt-2">
-            <Text className="text-black text-center text-lg font-bold">Save</Text>
+          <TouchableOpacity
+            onPress={handleSave}
+            disabled={isSaving}
+            className={`bg-[#22C55E] rounded-xl py-4 mt-2 ${isSaving ? 'opacity-50' : ''}`}
+          >
+            <Text className="text-black text-center text-lg font-bold">
+              {isSaving ? 'Saving...' : 'Save'}
+            </Text>
           </TouchableOpacity>
         </View>
 

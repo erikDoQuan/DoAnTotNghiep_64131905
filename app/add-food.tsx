@@ -160,7 +160,8 @@ export default function AddFoodScreen() {
               onPress={() => router.push({
                 pathname: '/food-detail',
                 params: {
-                  food: JSON.stringify(food)
+                  food: JSON.stringify(food),
+                  meal: meal
                 }
               })}
               className="flex-row items-center py-5 border-b border-gray-50"

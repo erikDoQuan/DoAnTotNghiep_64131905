@@ -1,15 +1,35 @@
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuth } from '../../contexts/AuthContext';
+import { supabase } from '../../supabase/supabaseClient';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Image, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+interface MealRecord {
+  id: number;
+  meal_type: string;
+  calories: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+  food_id: number;
+  portion_grams: number;
+  created_at: string;
+  foods?: {
+    food_name: string;
+    unit_base: string;
+  };
+}
+
 export default function DashboardScreen() {
-  const { profile, signOut } = useAuth();
+  const { user, profile, signOut } = useAuth();
   const router = useRouter();
   const [isMounted, setIsMounted] = useState(false);
+  const [meals, setMeals] = useState<MealRecord[]>([]);
+  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [isLoadingMeals, setIsLoadingMeals] = useState(true);
   const [currentWeekBase, setCurrentWeekBase] = useState(() => {
     const d = new Date();
     d.setDate(d.getDate() - d.getDay()); // Sunday of current week
@@ -17,15 +37,75 @@ export default function DashboardScreen() {
     return d;
   });
 
+  const fetchMealsForDate = useCallback(async (date: Date) => {
+    if (!user) return;
+    
+    setIsLoadingMeals(true);
+    try {
+      const searchDate = new Date(date);
+      searchDate.setHours(0, 0, 0, 0);
+      const nextDay = new Date(searchDate);
+      nextDay.setDate(searchDate.getDate() + 1);
+
+      const { data, error } = await supabase
+        .from('meals')
+        .select('*, foods(food_name, unit_base)')
+        .eq('user_id', user.id)
+        .gte('created_at', searchDate.toISOString())
+        .lt('created_at', nextDay.toISOString());
+
+      if (error) throw error;
+      setMeals(data || []);
+    } catch (error) {
+      console.error('Error fetching meals:', error);
+    } finally {
+      setIsLoadingMeals(false);
+    }
+  }, [user]);
+
   useEffect(() => {
     setIsMounted(true);
   }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchMealsForDate(selectedDate);
+    }, [fetchMealsForDate, selectedDate])
+  );
 
   const today = new Date();
 
   const bmi = (profile?.height_cm && profile?.weight_kg)
     ? (profile.weight_kg / Math.pow(profile.height_cm / 100, 2)).toFixed(1)
     : '0.0';
+
+  // Group meals and calculate totals
+  const getMealSummary = (type: string) => {
+    const typeMeals = meals.filter(m => m.meal_type === type.toLowerCase());
+    const totals = typeMeals.reduce((acc, m) => ({
+      calories: acc.calories + (m.calories || 0),
+      protein: acc.protein + (m.protein || 0),
+      carbs: acc.carbs + (m.carbs || 0),
+      fat: acc.fat + (m.fat || 0)
+    }), { calories: 0, protein: 0, carbs: 0, fat: 0 });
+
+    return {
+      items: typeMeals,
+      calories: totals.calories.toFixed(0),
+      protein: totals.protein.toFixed(1),
+      carbs: totals.carbs.toFixed(1),
+      fat: totals.fat.toFixed(1)
+    };
+  };
+
+  const breakfastSummary = getMealSummary('breakfast');
+  const lunchSummary = getMealSummary('lunch');
+  const dinnerSummary = getMealSummary('dinner');
+
+  const totalCaloriesToday = (meals || []).reduce((sum, m) => sum + (Number(m.calories) || 0), 0);
+  const totalFatToday = (meals || []).reduce((sum, m) => sum + (Number(m.fat) || 0), 0);
+  const totalCarbsToday = (meals || []).reduce((sum, m) => sum + (Number(m.carbs) || 0), 0);
+  const totalProteinToday = (meals || []).reduce((sum, m) => sum + (Number(m.protein) || 0), 0);
 
   // Calculate the current week based on currentWeekBase
   const getWeekDays = () => {
@@ -36,9 +116,15 @@ export default function DashboardScreen() {
         day: ['S', 'M', 'T', 'W', 'T', 'F', 'S'][i],
         date: day.getDate().toString().padStart(2, '0'),
         fullDate: day.toDateString(),
-        active: day.toDateString() === today.toDateString()
+        active: day.toDateString() === selectedDate.toDateString(),
+        isToday: day.toDateString() === today.toDateString()
       };
     });
+  };
+
+  const handleDateSelect = (dateStr: string) => {
+    const newDate = new Date(dateStr);
+    setSelectedDate(newDate);
   };
 
   const weekDays = getWeekDays();
@@ -83,7 +169,7 @@ export default function DashboardScreen() {
             </TouchableOpacity>
             <View>
               <Text className="text-gray-400 text-xs font-medium">Good morning!</Text>
-              <Text className="text-black text-lg font-bold">{profile?.full_name || 'Sajibur Rahman'}</Text>
+              <Text className="text-black text-lg font-bold">{profile?.full_name || 'User'}</Text>
             </View>
           </View>
           <View className="flex-row items-center">
@@ -96,6 +182,7 @@ export default function DashboardScreen() {
             </TouchableOpacity>
           </View>
         </View>
+
 
         {/* Weekly Progress Card */}
         <TouchableOpacity className="bg-dashboard-accent-green rounded-[32px] p-6 mb-4 flex-row justify-between items-center">
@@ -112,11 +199,10 @@ export default function DashboardScreen() {
           <View className="relative items-center justify-center">
             <View className="w-24 h-24 rounded-full border-[8px] border-white/30 items-center justify-center">
               <View className="items-center">
-                <Text className="text-black text-2xl font-bold">6</Text>
-                <Text className="text-black/60 text-[10px]">days</Text>
+                <Text className="text-black text-2xl font-bold">{(totalCaloriesToday || 0).toFixed(0)}</Text>
+                <Text className="text-black/60 text-[10px]">kcal</Text>
               </View>
             </View>
-            {/* Simple representation of the progress arc */}
             <View className="absolute w-24 h-24 rounded-full border-[8px] border-transparent border-t-dashboard-accent-progress border-r-dashboard-accent-progress rotate-[45deg]" />
           </View>
         </TouchableOpacity>
@@ -181,7 +267,7 @@ export default function DashboardScreen() {
           </View>
         </View>
 
-        {/* August 2025 Calendar */}
+        {/* Calendar Section */}
         <View className="mb-6">
           <View className="flex-row justify-between items-center mb-4 px-1">
             <Text className="text-black text-lg font-bold">{currentMonthYear}</Text>
@@ -207,19 +293,48 @@ export default function DashboardScreen() {
               contentContainerStyle={{ paddingHorizontal: 8, justifyContent: 'space-between', flexGrow: 1 }}
             >
               {weekDays.map((item, index) => (
-                <View key={index} className="items-center px-2">
-                  <Text className="text-gray-400 text-xs font-medium mb-2">{item.day}</Text>
+                <TouchableOpacity 
+                  key={index} 
+                  onPress={() => handleDateSelect(item.fullDate)}
+                  className="items-center px-2"
+                >
+                  <Text className={`text-xs font-medium mb-2 ${item.isToday ? 'text-dashboard-accent-green' : 'text-gray-400'}`}>
+                    {item.day}
+                  </Text>
                   <View className={`w-10 h-12 rounded-2xl items-center justify-center ${item.active ? 'bg-dashboard-accent-green' : ''}`}>
-                    <Text className={`text-base font-bold text-black`}>{item.date}</Text>
+                    <Text className={`text-base font-bold ${item.active ? 'text-black' : 'text-gray-600'}`}>
+                      {item.date}
+                    </Text>
                   </View>
-                </View>
+                </TouchableOpacity>
               ))}
             </ScrollView>
           </View>
         </View>
 
+        {/* Nutritional Summary Row (Daily Totals) */}
+        <View className="flex-row justify-between items-center bg-white/10 rounded-2xl py-4 px-6 mb-6 border border-gray-100/50" style={{ backgroundColor: 'rgba(0,0,0,0.03)' }}>
+          <View className="items-center">
+            <Text className="text-gray-500 text-[10px] mb-1">Fat</Text>
+            <Text className="text-black font-bold">{(totalFatToday || 0).toFixed(1)}</Text>
+          </View>
+          <View className="items-center">
+            <Text className="text-gray-500 text-[10px] mb-1">Carbs</Text>
+            <Text className="text-black font-bold">{(totalCarbsToday || 0).toFixed(1)}</Text>
+          </View>
+          <View className="items-center">
+            <Text className="text-gray-500 text-[10px] mb-1">Prot</Text>
+            <Text className="text-black font-bold">{(totalProteinToday || 0).toFixed(1)}</Text>
+          </View>
+          <View className="items-center border-l border-gray-200 pl-4">
+            <Text className="text-gray-500 text-[10px] mb-1">Calories</Text>
+            <Text className="text-black text-xl font-black">{(totalCaloriesToday || 0).toFixed(0)}</Text>
+          </View>
+        </View>
+
         {/* Meal Sections */}
         <View className="mb-2">
+          {/* Breakfast */}
           <View className="bg-white rounded-[24px] p-4 mb-3 shadow-sm">
             <View className="flex-row justify-between items-center mb-3">
               <View>
@@ -228,20 +343,17 @@ export default function DashboardScreen() {
                   <View className="w-6 h-6 rounded-md bg-[#FFFBEB] items-center justify-center mr-2">
                     <MaterialCommunityIcons name="fire" size={14} color="#F59E0B" />
                   </View>
-                  <Text className="text-gray-500 text-sm font-medium">456 - 512 <Text className="text-gray-400 text-xs">kcal</Text></Text>
+                  <Text className="text-gray-500 text-sm font-medium">
+                    {isLoadingMeals ? '...' : breakfastSummary.calories} <Text className="text-gray-400 text-xs">kcal</Text>
+                  </Text>
+                </View>
+                <View className="flex-row items-center mt-2 px-1">
+                  <Text className="text-gray-400 text-[10px] mr-3">Fat: {breakfastSummary.fat}g</Text>
+                  <Text className="text-gray-400 text-[10px] mr-3">Carbs: {breakfastSummary.carbs}g</Text>
+                  <Text className="text-gray-400 text-[10px]">Prot: {breakfastSummary.protein}g</Text>
                 </View>
               </View>
               <View className="flex-row items-center">
-                <View className="flex-row -space-x-3 mr-3">
-                  <Image
-                    source={{ uri: 'https://images.unsplash.com/photo-1525351484163-7529414344d8?q=80&w=100&auto=format&fit=crop' }}
-                    className="w-10 h-10 rounded-full border-2 border-white"
-                  />
-                  <Image
-                    source={{ uri: 'https://images.unsplash.com/photo-1484723091739-30a097e8f929?q=80&w=100&auto=format&fit=crop' }}
-                    className="w-10 h-10 rounded-full border-2 border-white"
-                  />
-                </View>
                 <TouchableOpacity
                   onPress={() => router.push({ pathname: '/add-food', params: { meal: 'Breakfast' } })}
                   className="w-10 h-10 rounded-full bg-gray-100 items-center justify-center"
@@ -252,7 +364,8 @@ export default function DashboardScreen() {
             </View>
           </View>
 
-          <View className="bg-white rounded-[24px] p-4 mb-8 shadow-sm">
+          {/* Lunch */}
+          <View className="bg-white rounded-[24px] p-4 mb-3 shadow-sm">
             <View className="flex-row justify-between items-center mb-3">
               <View>
                 <Text className="text-black text-base font-bold mb-1">Lunch time</Text>
@@ -260,20 +373,17 @@ export default function DashboardScreen() {
                   <View className="w-6 h-6 rounded-md bg-[#FFFBEB] items-center justify-center mr-2">
                     <MaterialCommunityIcons name="fire" size={14} color="#F59E0B" />
                   </View>
-                  <Text className="text-gray-500 text-sm font-medium">456 - 512 <Text className="text-gray-400 text-xs">kcal</Text></Text>
+                  <Text className="text-gray-500 text-sm font-medium">
+                    {isLoadingMeals ? '...' : lunchSummary.calories} <Text className="text-gray-400 text-xs">kcal</Text>
+                  </Text>
+                </View>
+                <View className="flex-row items-center mt-2 px-1">
+                  <Text className="text-gray-400 text-[10px] mr-3">Fat: {lunchSummary.fat}g</Text>
+                  <Text className="text-gray-400 text-[10px] mr-3">Carbs: {lunchSummary.carbs}g</Text>
+                  <Text className="text-gray-400 text-[10px]">Prot: {lunchSummary.protein}g</Text>
                 </View>
               </View>
               <View className="flex-row items-center">
-                <View className="flex-row -space-x-3 mr-3">
-                  <Image
-                    source={{ uri: 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?q=80&w=100&auto=format&fit=crop' }}
-                    className="w-10 h-10 rounded-full border-2 border-white"
-                  />
-                  <Image
-                    source={{ uri: 'https://images.unsplash.com/photo-1540189549336-e6e99c3679fe?q=80&w=100&auto=format&fit=crop' }}
-                    className="w-10 h-10 rounded-full border-2 border-white"
-                  />
-                </View>
                 <TouchableOpacity
                   onPress={() => router.push({ pathname: '/add-food', params: { meal: 'Lunch' } })}
                   className="w-10 h-10 rounded-full bg-gray-100 items-center justify-center"
@@ -284,8 +394,38 @@ export default function DashboardScreen() {
             </View>
           </View>
 
+          {/* Dinner */}
+          <View className="bg-white rounded-[24px] p-4 mb-3 shadow-sm">
+            <View className="flex-row justify-between items-center mb-3">
+              <View>
+                <Text className="text-black text-base font-bold mb-1">Dinner</Text>
+                <View className="flex-row items-center">
+                  <View className="w-6 h-6 rounded-md bg-[#FFFBEB] items-center justify-center mr-2">
+                    <MaterialCommunityIcons name="fire" size={14} color="#F59E0B" />
+                  </View>
+                  <Text className="text-gray-500 text-sm font-medium">
+                    {isLoadingMeals ? '...' : dinnerSummary.calories} <Text className="text-gray-400 text-xs">kcal</Text>
+                  </Text>
+                </View>
+                <View className="flex-row items-center mt-2 px-1">
+                  <Text className="text-gray-400 text-[10px] mr-3">Fat: {dinnerSummary.fat}g</Text>
+                  <Text className="text-gray-400 text-[10px] mr-3">Carbs: {dinnerSummary.carbs}g</Text>
+                  <Text className="text-gray-400 text-[10px]">Prot: {dinnerSummary.protein}g</Text>
+                </View>
+              </View>
+              <View className="flex-row items-center">
+                <TouchableOpacity
+                  onPress={() => router.push({ pathname: '/add-food', params: { meal: 'Dinner' } })}
+                  className="w-10 h-10 rounded-full bg-gray-100 items-center justify-center"
+                >
+                  <MaterialCommunityIcons name="plus" size={20} color="black" />
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+
           {/* Logout for testing */}
-          <TouchableOpacity onPress={() => signOut()} className="mb-10 items-center">
+          <TouchableOpacity onPress={() => signOut()} className="mt-6 mb-10 items-center">
             <Text className="text-gray-400 text-xs italic">Logout Account</Text>
           </TouchableOpacity>
         </View>
