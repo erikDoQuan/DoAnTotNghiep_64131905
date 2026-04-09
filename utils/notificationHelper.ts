@@ -2,6 +2,8 @@ import * as Device from 'expo-device';
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 
+const SLEEP_REMINDER_ID = 'sleep-reminder-daily';
+
 // Cấu hình cách hiển thị thông báo khi app đang mở (Foreground)
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -46,11 +48,9 @@ export async function registerForPushNotificationsAsync() {
   return token;
 }
 
-/**
- * Lập lịch thông báo nhắc uống nước hàng ngày
- */
+
 export async function scheduleWaterReminders() {
-  // Huỷ tất cả thông báo cũ để tránh trùng lặp
+
   await Notifications.cancelAllScheduledNotificationsAsync();
 
   const reminderTimes = [
@@ -80,6 +80,42 @@ export async function scheduleWaterReminders() {
   }
 
   console.log(`Đã lập lịch ${reminderTimes.length} thông báo nhắc uống nước.`);
+}
+
+/**
+ * Lên lịch nhắc đi ngủ hàng ngày dựa theo sleep_reminder_time trong profile
+ * Truyền null để huỷ lịch hiện tại.
+ */
+export async function scheduleSleepReminder(sleepReminderTime: string | null) {
+  // Huỷ reminder cũ (nếu có) — không throw nếu không tồn tại
+  try {
+    await Notifications.cancelScheduledNotificationAsync(SLEEP_REMINDER_ID);
+  } catch (_) {}
+
+  if (!sleepReminderTime) return;
+
+  // Format từ Postgres TIME: "HH:MM:SS" hoặc "HH:MM"
+  const parts = sleepReminderTime.split(':').map(Number);
+  const hour = parts[0];
+  const minute = parts[1] ?? 0;
+
+  if (isNaN(hour) || isNaN(minute)) return;
+
+  await Notifications.scheduleNotificationAsync({
+    identifier: SLEEP_REMINDER_ID,
+    content: {
+      title: '🌙 Đến giờ đi ngủ rồi!',
+      body: 'Hãy nghỉ ngơi để cơ thể phục hồi. Ngủ đủ 8 tiếng giúp tăng cường sức khoẻ mỗi ngày.',
+      sound: true,
+    },
+    trigger: {
+      type: Notifications.SchedulableTriggerInputTypes.DAILY,
+      hour,
+      minute,
+    } as any,
+  });
+
+  console.log(`Đã lập lịch nhắc ngủ lúc ${hour}:${String(minute).padStart(2, '0')}`);
 }
 
 /**

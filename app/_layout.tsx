@@ -7,7 +7,7 @@ import '../global.css';
 
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { AuthProvider, useAuth } from '../contexts/AuthContext';
-import { registerForPushNotificationsAsync, scheduleWaterReminders } from '../utils/notificationHelper';
+import { registerForPushNotificationsAsync, scheduleWaterReminders, scheduleSleepReminder } from '../utils/notificationHelper';
 import * as Notifications from 'expo-notifications';
 import { useRef } from 'react';
 
@@ -20,6 +20,13 @@ function RedirectHandler() {
   const segments = useSegments();
   const router = useRouter();
   const rootNavigationState = useRootNavigationState();
+
+  // Lên lịch nhắc ngủ mỗi khi sleep_reminder_time thay đổi
+  useEffect(() => {
+    if (profile) {
+      scheduleSleepReminder(profile.sleep_reminder_time);
+    }
+  }, [profile?.sleep_reminder_time]);
 
   useEffect(() => {
     if (isLoading || !rootNavigationState?.key || (segments as any).length === 0) return;
@@ -88,6 +95,7 @@ function RootLayoutNav() {
         <Stack.Screen name="weight-details" options={{ headerShown: false }} />
         <Stack.Screen name="set-weight-goal" options={{ headerShown: false }} />
         <Stack.Screen name="steps-details" options={{ headerShown: false }} />
+        <Stack.Screen name="sleep-details" options={{ headerShown: false }} />
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal', headerShown: true }} />
       </Stack>

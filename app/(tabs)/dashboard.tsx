@@ -46,6 +46,7 @@ export default function DashboardScreen() {
   const [stepsToday, setStepsToday] = useState(0);
   const [lastSyncedSteps, setLastSyncedSteps] = useState(0);
   const [isAvatarModalVisible, setIsAvatarModalVisible] = useState(false);
+  const [sleepDuration, setSleepDuration] = useState<number | null>(null);
 
   // Update current time every minute to refresh water intake
   useEffect(() => {
@@ -222,10 +223,29 @@ export default function DashboardScreen() {
     setIsMounted(true);
   }, []);
 
+  const fetchTodaySleep = useCallback(async () => {
+    if (!user) return;
+    const start = new Date();
+    start.setHours(0, 0, 0, 0);
+    const end = new Date();
+    end.setHours(23, 59, 59, 999);
+    const { data } = await supabase
+      .from('sleep_records')
+      .select('sleep_duration')
+      .eq('user_id', user.id)
+      .gte('created_at', start.toISOString())
+      .lte('created_at', end.toISOString())
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    setSleepDuration(data?.sleep_duration ?? null);
+  }, [user]);
+
   useFocusEffect(
     useCallback(() => {
       fetchMealsForDate(selectedDate);
-    }, [fetchMealsForDate, selectedDate])
+      fetchTodaySleep();
+    }, [fetchMealsForDate, selectedDate, fetchTodaySleep])
   );
 
   const today = new Date();
@@ -488,20 +508,27 @@ export default function DashboardScreen() {
             </View>
           </TouchableOpacity>
 
-          <View
+          <TouchableOpacity
+            onPress={() => router.push('/sleep-details')}
             className="w-[48%] bg-dashboard-card rounded-2xl p-4 shadow-sm"
           >
             <View className="flex-row justify-between items-center mb-4">
               <Text className="text-black text-sm font-semibold">Sleep{"\n"}Time</Text>
               <View className="w-10 h-10 rounded-full bg-[#8B5CF6]/10 items-center justify-center">
-                <MaterialCommunityIcons name="sleep" size={20} color="#8B5CF6" />
+                <MaterialCommunityIcons name="moon-waning-crescent" size={20} color="#8B5CF6" />
               </View>
             </View>
             <View className="flex-row items-baseline">
-              <Text className="text-black text-xl font-bold">7h 35m</Text>
-              <Text className="text-text-secondary text-xs ml-1 font-medium">total</Text>
+              <Text className="text-black text-xl font-bold">
+                {sleepDuration != null
+                  ? `${Math.floor(sleepDuration)}h ${Math.round((sleepDuration - Math.floor(sleepDuration)) * 60)}m`
+                  : '--'}
+              </Text>
+              <Text className="text-text-secondary text-xs ml-1 font-medium">
+                {sleepDuration != null ? 'total' : 'tap to log'}
+              </Text>
             </View>
-          </View>
+          </TouchableOpacity>
         </View>
 
         {/* Calendar Section */}

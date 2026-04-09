@@ -12,6 +12,7 @@ type Profile = {
   height_cm: number | null;
   weight_kg: number | null;
   move_goal_kcal: number | null;
+  sleep_reminder_time: string | null;
 };
 
 type AuthContextType = {
