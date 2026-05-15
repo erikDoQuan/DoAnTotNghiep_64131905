@@ -278,7 +278,7 @@ export default function SleepDetailsScreen() {
         <TouchableOpacity onPress={() => router.back()}>
           <MaterialCommunityIcons name="chevron-left" size={32} color={SLEEP_COLOR} />
         </TouchableOpacity>
-        <Text className="text-white text-base font-bold">Sleep Tracker</Text>
+        <Text className="text-white text-base font-bold">Theo dõi giấc ngủ</Text>
         <TouchableOpacity
           onPress={handleSavePress}
           disabled={isSaving}

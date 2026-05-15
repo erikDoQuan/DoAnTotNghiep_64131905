@@ -49,37 +49,40 @@ export async function registerForPushNotificationsAsync() {
 }
 
 
-export async function scheduleWaterReminders() {
+export async function scheduleWaterReminders(count: number = 8, mlPerGlass: number = 250) {
+  // Chỉ huỷ water reminders, không huỷ sleep reminder
+  const scheduled = await Notifications.getAllScheduledNotificationsAsync();
+  await Promise.all(
+    scheduled
+      .filter(n => n.content.data?.type === 'water_reminder')
+      .map(n => Notifications.cancelScheduledNotificationAsync(n.identifier))
+  );
 
-  await Notifications.cancelAllScheduledNotificationsAsync();
+  const START = 7;    // 7:00
+  const END   = 21.5; // 21:30
+  const step  = count > 1 ? (END - START) / (count - 1) : 0;
 
-  const reminderTimes = [
-    { hour: 7, minute: 0 },
-    { hour: 9, minute: 0 },
-    { hour: 11, minute: 30 },
-    { hour: 13, minute: 30 },
-    { hour: 15, minute: 50 },
-    { hour: 17, minute: 30 },
-    { hour: 19, minute: 30 },
-    { hour: 21, minute: 35 },
-  ];
+  for (let i = 0; i < count; i++) {
+    const totalH = START + i * step;
+    const hour   = Math.floor(totalH);
+    const minute = Math.round((totalH % 1) * 60);
 
-  for (const time of reminderTimes) {
     await Notifications.scheduleNotificationAsync({
       content: {
-        title: "Đến giờ uống nước",
-        body: "Hãy uống một ly nước để giữ cơ thể khỏe mạnh.",
+        title: '💧 Đến giờ uống nước!',
+        body:  `Uống ${mlPerGlass}ml để duy trì cơ thể khoẻ mạnh.`,
         sound: true,
+        data:  { type: 'water_reminder' },
       },
       trigger: {
-        type: Notifications.SchedulableTriggerInputTypes.DAILY,
-        hour: time.hour,
-        minute: time.minute,
+        type:   Notifications.SchedulableTriggerInputTypes.DAILY,
+        hour,
+        minute,
       } as any,
     });
   }
 
-  console.log(`Đã lập lịch ${reminderTimes.length} thông báo nhắc uống nước.`);
+  console.log(`Đã lập lịch ${count} thông báo nhắc uống nước (${mlPerGlass}ml/lần).`);
 }
 
 /**
@@ -90,7 +93,7 @@ export async function scheduleSleepReminder(sleepReminderTime: string | null) {
   // Huỷ reminder cũ (nếu có) — không throw nếu không tồn tại
   try {
     await Notifications.cancelScheduledNotificationAsync(SLEEP_REMINDER_ID);
-  } catch (_) {}
+  } catch (_) { }
 
   if (!sleepReminderTime) return;
 

@@ -21,7 +21,7 @@ interface FoodItem {
 export default function FoodDetailScreen() {
   const router = useRouter();
   const { user } = useAuth();
-  const { food: foodParam, meal } = useLocalSearchParams<{ food: string; meal: string }>();
+  const { food: foodParam, meal, date } = useLocalSearchParams<{ food: string; meal: string; date?: string }>();
 
   const food: FoodItem = useMemo(() => {
     try {
@@ -58,17 +58,18 @@ export default function FoodDetailScreen() {
 
   const handleSave = async () => {
     if (!user) {
-      Alert.alert('Error', 'You must be logged in to save meals.');
+      Alert.alert('Lỗi', 'Bạn cần đăng nhập để lưu bữa ăn.');
       return;
     }
 
     if (qNum <= 0) {
-      Alert.alert('Error', 'Please enter a valid quantity.');
+      Alert.alert('Lỗi', 'Vui lòng nhập số lượng hợp lệ.');
       return;
     }
 
     setIsSaving(true);
     try {
+      const mealDate = date ? new Date(date) : new Date();
       const { error } = await supabase.from('meals').insert({
         user_id: user.id,
         food_id: food.id,
@@ -78,15 +79,16 @@ export default function FoodDetailScreen() {
         protein: parseFloat(calculated.protein),
         carbs: parseFloat(calculated.carbs),
         fat: parseFloat(calculated.fat),
+        created_at: mealDate.toISOString(),
       });
 
       if (error) throw error;
 
-      Alert.alert('Success', 'Meal recorded successfully!');
+      Alert.alert('Đã lưu', 'Bữa ăn đã được ghi lại thành công!');
       router.replace('/(tabs)/dashboard');
     } catch (error: any) {
       console.error('Error saving meal:', error);
-      Alert.alert('Error', error.message || 'Failed to save meal.');
+      Alert.alert('Lỗi', error.message || 'Không thể lưu bữa ăn.');
     } finally {
       setIsSaving(false);
     }
@@ -129,7 +131,7 @@ export default function FoodDetailScreen() {
             className={`bg-[#22C55E] rounded-xl py-4 mt-2 ${isSaving ? 'opacity-50' : ''}`}
           >
             <Text className="text-black text-center text-lg font-bold">
-              {isSaving ? 'Saving...' : 'Save'}
+              {isSaving ? 'Đang lưu...' : 'Lưu'}
             </Text>
           </TouchableOpacity>
         </View>
@@ -137,29 +139,29 @@ export default function FoodDetailScreen() {
         {/* Nutritional Overview Grid */}
         <View className="flex-row flex-wrap border-t border-b border-gray-800 mt-8">
           <View className="w-1/2 p-4 border-r border-b border-gray-800 items-center">
-            <Text className="text-gray-400 text-sm">Calories</Text>
-            <Text className="text-white text-lg font-bold">{calculated.calories} (3%)</Text>
+            <Text className="text-gray-400 text-sm">Calo</Text>
+            <Text className="text-white text-lg font-bold">{calculated.calories} kcal</Text>
           </View>
           <View className="w-1/2 p-4 border-b border-gray-800 items-center">
-            <Text className="text-gray-400 text-sm">Fat</Text>
+            <Text className="text-gray-400 text-sm">Chất béo</Text>
             <Text className="text-white text-lg font-bold">{calculated.fat}g</Text>
           </View>
           <View className="w-1/2 p-4 border-r border-gray-800 items-center">
-            <Text className="text-gray-400 text-sm">Carbs</Text>
+            <Text className="text-gray-400 text-sm">Carbohydrate</Text>
             <Text className="text-white text-lg font-bold">{calculated.carbs}g</Text>
           </View>
           <View className="w-1/2 p-4 items-center">
-            <Text className="text-gray-400 text-sm">Protein</Text>
+            <Text className="text-gray-400 text-sm">Đạm</Text>
             <Text className="text-white text-lg font-bold">{calculated.protein}g</Text>
           </View>
         </View>
 
         {/* Nutritional Information Detail Section */}
         <View className="p-6">
-          <Text className="text-white text-3xl font-black mb-6">Nutritional Information</Text>
+          <Text className="text-white text-3xl font-black mb-6">Thông tin dinh dưỡng</Text>
 
           <View className="flex-row justify-between mb-2">
-            <Text className="text-white text-lg font-bold">Serving Size</Text>
+            <Text className="text-white text-lg font-bold">Khẩu phần</Text>
             <Text className="text-white text-lg font-bold">{quantity} {unit}</Text>
           </View>
           <View className="h-[8px] bg-gray-800 rounded-full mb-6">
@@ -167,56 +169,56 @@ export default function FoodDetailScreen() {
           </View>
 
           <View className="items-end mb-4">
-            <Text className="text-white font-bold">Per serve</Text>
+            <Text className="text-white font-bold">Mỗi khẩu phần</Text>
           </View>
 
           <View className="border-t border-gray-800 pt-4 gap-y-4">
             <View>
               <View className="flex-row justify-between border-b border-gray-800 pb-2">
-                <Text className="text-white text-lg font-bold">Energy</Text>
+                <Text className="text-white text-lg font-bold">Năng lượng</Text>
                 <Text className="text-white text-lg font-bold">{calculated.energy_kj} kJ</Text>
               </View>
-              <Text className="text-gray-400 text-right mt-1">{calculated.calories} cal</Text>
+              <Text className="text-gray-400 text-right mt-1">{calculated.calories} kcal</Text>
             </View>
 
             <View>
               <View className="flex-row justify-between border-b border-gray-800 pb-2">
-                <Text className="text-white text-lg font-bold">Fat</Text>
+                <Text className="text-white text-lg font-bold">Chất béo</Text>
                 <Text className="text-white text-lg font-bold">{calculated.fat}g</Text>
               </View>
               <View className="flex-row justify-between pt-1 opacity-60">
-                <Text className="text-white ml-4">Saturated Fat</Text>
+                <Text className="text-white ml-4">Béo bão hoà</Text>
                 <Text className="text-white">{(parseFloat(calculated.fat) * 0.3).toFixed(1)}g</Text>
               </View>
             </View>
 
             <View>
               <View className="flex-row justify-between border-b border-gray-800 pb-2">
-                <Text className="text-white text-lg font-bold">Carbohydrates</Text>
+                <Text className="text-white text-lg font-bold">Carbohydrate</Text>
                 <Text className="text-white text-lg font-bold">{calculated.carbs}g</Text>
               </View>
               <View className="flex-row justify-between pt-1 opacity-60">
-                <Text className="text-white ml-4">Sugar</Text>
+                <Text className="text-white ml-4">Đường</Text>
                 <Text className="text-white">{(parseFloat(calculated.carbs) * 0.5).toFixed(0)}g</Text>
               </View>
               <View className="flex-row justify-between pt-1 opacity-60">
-                <Text className="text-white ml-4">Fiber</Text>
+                <Text className="text-white ml-4">Chất xơ</Text>
                 <Text className="text-white">{(parseFloat(calculated.carbs) * 0.1).toFixed(1)}g</Text>
               </View>
             </View>
 
             <View className="flex-row justify-between border-b border-gray-800 pb-2">
-              <Text className="text-white text-lg font-bold">Protein</Text>
+              <Text className="text-white text-lg font-bold">Đạm</Text>
               <Text className="text-white text-lg font-bold">{calculated.protein}g</Text>
             </View>
 
             <View className="flex-row justify-between border-b border-gray-800 pb-2">
-              <Text className="text-white text-lg font-bold">Sodium</Text>
+              <Text className="text-white text-lg font-bold">Natri</Text>
               <Text className="text-white">1mg</Text>
             </View>
 
             <View className="flex-row justify-between border-b border-gray-800 pb-2">
-              <Text className="text-white text-lg font-bold">Potassium</Text>
+              <Text className="text-white text-lg font-bold">Kali</Text>
               <Text className="text-white">{(parseFloat(calculated.carbs) * 15).toFixed(0)}mg</Text>
             </View>
           </View>

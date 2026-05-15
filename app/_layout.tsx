@@ -7,6 +7,7 @@ import '../global.css';
 
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { AuthProvider, useAuth } from '../contexts/AuthContext';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { registerForPushNotificationsAsync, scheduleWaterReminders, scheduleSleepReminder } from '../utils/notificationHelper';
 import * as Notifications from 'expo-notifications';
 import { useRef } from 'react';
@@ -61,9 +62,13 @@ function RootLayoutNav() {
   const responseListener = useRef<Notifications.Subscription | undefined>(undefined);
 
   useEffect(() => {
-    // 1. Xin quyền & Lập lịch nhắc nước khi app mở
-    registerForPushNotificationsAsync().then(() => {
-      scheduleWaterReminders();
+    // 1. Xin quyền & Lập lịch nhắc nước với cài đặt đã lưu
+    registerForPushNotificationsAsync().then(async () => {
+      const countRaw = await AsyncStorage.getItem('water_reminder_count');
+      const mlRaw    = await AsyncStorage.getItem('water_ml_per_glass');
+      const count    = parseInt(countRaw || '8')  || 8;
+      const ml       = parseInt(mlRaw   || '250') || 250;
+      scheduleWaterReminders(count, ml);
     });
 
     // 2. Lắng nghe notification khi app đang mở

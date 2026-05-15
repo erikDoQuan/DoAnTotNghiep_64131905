@@ -19,18 +19,19 @@ interface FoodItem {
 
 export default function AddFoodScreen() {
   const router = useRouter();
-  const { meal = 'Breakfast' } = useLocalSearchParams<{ meal: string }>();
+  const { meal = 'Breakfast', date } = useLocalSearchParams<{ meal: string; date?: string }>();
   const [searchQuery, setSearchQuery] = useState('');
   const [foods, setFoods] = useState<FoodItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [activeTab, setActiveTab] = useState('FOOD');
   const [selectedCategory, setSelectedCategory] = useState<number>(1);
 
-  const today = new Date();
-  const dateString = today.toLocaleDateString('en-US', {
+  const mealDate = date ? new Date(date) : new Date();
+  const dateString = mealDate.toLocaleDateString('vi-VN', {
     weekday: 'long',
-    month: 'short',
-    day: 'numeric'
+    day: 'numeric',
+    month: 'numeric',
+    year: 'numeric',
   });
 
   const searchFoods = useCallback(async (query: string, categoryId: number | null) => {
@@ -161,7 +162,8 @@ export default function AddFoodScreen() {
                 pathname: '/food-detail',
                 params: {
                   food: JSON.stringify(food),
-                  meal: meal
+                  meal,
+                  date: date ?? new Date().toISOString(),
                 }
               })}
               className="flex-row items-center py-5 border-b border-gray-50"
