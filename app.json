@@ -14,7 +14,7 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.anonymous.LifeTrack",
+      "bundleIdentifier": "com.quan.lifetrack",
       "infoPlist": {
         "NSMotionUsageDescription": "LifeTrack cần quyền truy cập cảm biến vận động để đếm bước chân và theo dõi hoạt động hàng ngày của bạn."
       }

@@ -46,15 +46,23 @@ export default function ProfileScreen() {
     setSuccessMsg('');
 
     if (!fullName.trim()) {
-      setErrorMsg('Please enter your full name');
+      setErrorMsg('Vui lòng nhập họ và tên');
       return;
     }
 
     const heightNum = parseFloat(height);
     const weightNum = parseFloat(weight);
 
-    if (isNaN(heightNum) || isNaN(weightNum)) {
-      setErrorMsg('Please enter valid numbers for Height and Weight');
+    if (isNaN(heightNum) || isNaN(weightNum) || heightNum <= 0 || weightNum <= 0) {
+      setErrorMsg('Chiều cao và cân nặng phải lớn hơn 0');
+      return;
+    }
+    if (heightNum < 50 || heightNum > 250) {
+      setErrorMsg('Chiều cao phải từ 50 đến 250 cm');
+      return;
+    }
+    if (weightNum < 10 || weightNum > 300) {
+      setErrorMsg('Cân nặng phải từ 10 đến 300 kg');
       return;
     }
 
@@ -79,7 +87,7 @@ export default function ProfileScreen() {
         setErrorMsg(error.message);
       } else {
         await refreshProfile();
-        setSuccessMsg('Profile updated successfully!');
+        setSuccessMsg('Cập nhật hồ sơ thành công!');
         setTimeout(() => setSuccessMsg(''), 3000);
       }
     } catch (error: any) {
@@ -112,7 +120,7 @@ export default function ProfileScreen() {
           >
             <MaterialCommunityIcons name="chevron-left" size={24} color="black" />
           </TouchableOpacity>
-          <Text className="text-black text-xl font-bold">Edit Profile</Text>
+          <Text className="text-black text-xl font-bold">Chỉnh sửa hồ sơ</Text>
           <View className="w-10" />
         </View>
 
@@ -122,14 +130,14 @@ export default function ProfileScreen() {
             <View className="w-24 h-24 rounded-full bg-gray-200 border-4 border-white shadow-sm overflow-hidden mb-3">
               <MaterialCommunityIcons name="account" size={60} color="#999" style={{ alignSelf: 'center', marginTop: 10 }} />
             </View>
-            <Text className="text-gray-400 text-sm font-medium">Update your photo</Text>
+            <Text className="text-gray-400 text-sm font-medium">Ảnh đại diện</Text>
           </View>
 
           <View className="mb-6">
-            <Text className="text-black text-sm font-bold mb-2 ml-1">Full Name</Text>
+            <Text className="text-black text-sm font-bold mb-2 ml-1">Họ và tên</Text>
             <AppTextInput
               icon="account-outline"
-              placeholder="Your Full Name"
+              placeholder="Nhập họ và tên"
               placeholderTextColor="#999"
               value={fullName}
               onChangeText={setFullName}
@@ -140,16 +148,16 @@ export default function ProfileScreen() {
           </View>
 
           <View className="mb-6">
-            <Text className="text-black text-sm font-bold mb-3 ml-1">Gender</Text>
+            <Text className="text-black text-sm font-bold mb-3 ml-1">Giới tính</Text>
             <View className="flex-row" style={{ gap: 12 }}>
-              <GenderOption label="Male" value="Male" />
-              <GenderOption label="Female" value="Female" />
-              <GenderOption label="Other" value="Other" />
+              <GenderOption label="Nam" value="Male" />
+              <GenderOption label="Nữ" value="Female" />
+              <GenderOption label="Khác" value="Other" />
             </View>
           </View>
 
           <View className="mb-6">
-            <Text className="text-black text-sm font-bold mb-2 ml-1">Birth Date</Text>
+            <Text className="text-black text-sm font-bold mb-2 ml-1">Ngày sinh</Text>
             <AppTextInput
               icon="calendar-outline"
               placeholder="YYYY-MM-DD"
@@ -164,10 +172,10 @@ export default function ProfileScreen() {
 
           <View className="flex-row mb-6" style={{ gap: 16 }}>
             <View className="flex-1">
-              <Text className="text-black text-sm font-bold mb-2 ml-1">Height (cm)</Text>
+              <Text className="text-black text-sm font-bold mb-2 ml-1">Chiều cao (cm)</Text>
               <AppTextInput
                 icon="human-male-height"
-                placeholder="e.g. 175"
+                placeholder="VD: 175"
                 placeholderTextColor="#999"
                 keyboardType="numeric"
                 value={height}
@@ -178,10 +186,10 @@ export default function ProfileScreen() {
               />
             </View>
             <View className="flex-1">
-              <Text className="text-black text-sm font-bold mb-2 ml-1">Weight (kg)</Text>
+              <Text className="text-black text-sm font-bold mb-2 ml-1">Cân nặng (kg)</Text>
               <AppTextInput
                 icon="weight-kilogram"
-                placeholder="e.g. 70"
+                placeholder="VD: 70"
                 placeholderTextColor="#999"
                 keyboardType="numeric"
                 value={weight}
@@ -209,7 +217,7 @@ export default function ProfileScreen() {
             {isLoading ? (
               <ActivityIndicator color="black" />
             ) : (
-              <Text className="text-black text-lg font-bold">Save Changes</Text>
+              <Text className="text-black text-lg font-bold">Lưu thay đổi</Text>
             )}
           </TouchableOpacity>
 

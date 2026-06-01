@@ -303,7 +303,7 @@ export default function NotificationsScreen() {
         <View className="flex-row items-start bg-blue-50 rounded-2xl px-4 py-3">
           <MaterialCommunityIcons name="information-outline" size={16} color="#3B82F6" style={{ marginTop: 1 }} />
           <Text className="text-blue-600 text-xs leading-5 ml-2 flex-1">
-            Nhắc nhở hoạt động khi app đang mở. Đảm bảo bạn đã cấp quyền thông báo cho LifeTrack trong Cài đặt iPhone.
+            Nhắc nhở hoạt động khi app đang mở. Đảm bảo bạn đã cấp quyền thông báo cho LifeTrack trong Cài đặt thiết bị.
           </Text>
         </View>
       </View>

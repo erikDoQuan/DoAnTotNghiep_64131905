@@ -26,7 +26,7 @@ export default function WeightDetailsScreen() {
   const router = useRouter();
   const [goal, setGoal] = useState<WeightGoal | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [weightLogs, setWeightLogs] = useState<{ date: string; weight: number }[]>([]);
+  const [weightLogs, setWeightLogs] = useState<{ id: number; date: string; weight: number }[]>([]);
   const [showLogModal, setShowLogModal] = useState(false);
   const [inputWeight, setInputWeight] = useState('');
   const [isSavingWeight, setIsSavingWeight] = useState(false);
@@ -40,11 +40,11 @@ export default function WeightDetailsScreen() {
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 29);
       const { data } = await supabase
         .from('weight_records')
-        .select('record_date, weight_kg')
+        .select('id, record_date, weight_kg')
         .eq('user_id', user.id)
         .gte('record_date', toLocalDateStr(thirtyDaysAgo))
         .order('record_date', { ascending: true });
-      setWeightLogs((data || []).map(r => ({ date: r.record_date, weight: r.weight_kg })));
+      setWeightLogs((data || []).map(r => ({ id: r.id, date: r.record_date, weight: r.weight_kg })));
     } catch {
       // ignore
     }
@@ -79,6 +79,28 @@ export default function WeightDetailsScreen() {
     } finally {
       setIsSavingWeight(false);
     }
+  };
+
+  const deleteWeightLog = (id: number, dateStr: string) => {
+    Alert.alert(
+      'Xoá bản ghi?',
+      `Xoá cân nặng ngày ${new Date(dateStr).toLocaleDateString('vi-VN')}?`,
+      [
+        { text: 'Huỷ', style: 'cancel' },
+        {
+          text: 'Xoá',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await supabase.from('weight_records').delete().eq('id', id);
+              setWeightLogs(prev => prev.filter(l => l.id !== id));
+            } catch (e: any) {
+              Alert.alert('Lỗi', e.message || 'Không thể xoá.');
+            }
+          },
+        },
+      ]
+    );
   };
 
   useEffect(() => {
@@ -341,6 +363,35 @@ export default function WeightDetailsScreen() {
             </>
           )}
         </View>
+
+        {/* Recent weight records list */}
+        {weightLogs.length > 0 && (
+          <View className="bg-brand-tertiary rounded-3xl p-6 mb-6">
+            <Text className="text-text-secondary text-sm font-medium mb-4">Bản ghi gần đây</Text>
+            {[...weightLogs].reverse().slice(0, 7).map((log) => (
+              <View key={log.id} className="flex-row items-center justify-between py-2.5 border-b border-white/5">
+                <View className="flex-row items-center">
+                  <View className="w-8 h-8 rounded-full bg-brand-primary/10 items-center justify-center mr-3">
+                    <MaterialCommunityIcons name="scale-bathroom" size={16} color="#EFFF3B" />
+                  </View>
+                  <View>
+                    <Text className="text-text-primary text-sm font-semibold">{log.weight} kg</Text>
+                    <Text className="text-text-muted text-xs">
+                      {new Date(log.date).toLocaleDateString('vi-VN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                    </Text>
+                  </View>
+                </View>
+                <TouchableOpacity
+                  onPress={() => deleteWeightLog(log.id, log.date)}
+                  className="w-8 h-8 rounded-full items-center justify-center"
+                  style={{ backgroundColor: '#F8717122' }}
+                >
+                  <MaterialCommunityIcons name="trash-can-outline" size={16} color="#F87171" />
+                </TouchableOpacity>
+              </View>
+            ))}
+          </View>
+        )}
 
         {/* Info Section */}
         <View className="px-2">

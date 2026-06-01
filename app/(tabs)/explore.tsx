@@ -17,6 +17,7 @@ interface DayData {
   steps: number;
   calories: number;
   sleep: number;
+  water: number;
 }
 
 interface WeightPoint {
@@ -53,6 +54,7 @@ export default function StatsScreen() {
   const [selectedStepIdx, setSelectedStepIdx] = useState<number | null>(null);
   const [selectedCalIdx, setSelectedCalIdx] = useState<number | null>(null);
   const [selectedSleepIdx, setSelectedSleepIdx] = useState<number | null>(null);
+  const [selectedWaterIdx, setSelectedWaterIdx] = useState<number | null>(null);
 
   const fetchStats = useCallback(async () => {
     if (!user) return;
@@ -83,10 +85,11 @@ export default function StatsScreen() {
           steps: 0,
           calories: 0,
           sleep: 0,
+          water: 0,
         };
       });
 
-      const [stepRes, mealRes, sleepRes, weightRes] = await Promise.all([
+      const [stepRes, mealRes, sleepRes, weightRes, waterRes] = await Promise.all([
         supabase
           .from('step_records')
           .select('steps, created_at')
@@ -112,6 +115,12 @@ export default function StatsScreen() {
           .gte('record_date', startDateStr)
           .lte('record_date', todayStr)
           .order('record_date', { ascending: true }),
+        supabase
+          .from('water_records')
+          .select('record_date, ml_consumed')
+          .eq('user_id', user.id)
+          .gte('record_date', startDateStr)
+          .lte('record_date', todayStr),
       ]);
 
       (stepRes.data || []).forEach(r => {
@@ -132,6 +141,11 @@ export default function StatsScreen() {
         if (d && (r.sleep_duration || 0) > d.sleep) d.sleep = r.sleep_duration;
       });
 
+      (waterRes.data || []).forEach(r => {
+        const d = days.find(x => x.date === r.record_date);
+        if (d) d.water = r.ml_consumed || 0;
+      });
+
       setDayData(days);
 
       const heightM = (profile?.height_cm || 170) / 100;
@@ -139,6 +153,7 @@ export default function StatsScreen() {
       setSelectedStepIdx(null);
       setSelectedCalIdx(null);
       setSelectedSleepIdx(null);
+      setSelectedWaterIdx(null);
       setWeightPoints(
         (weightRes.data || []).map(r => {
           const d   = new Date(r.record_date);
@@ -173,7 +188,69 @@ export default function StatsScreen() {
   const avgSleep = daysWithSleep.length
     ? daysWithSleep.reduce((s, d) => s + d.sleep, 0) / daysWithSleep.length
     : 0;
-  const stepGoal = profile?.step_goal || 10000;
+  const stepGoal  = profile?.move_goal_kcal ? Math.round(profile.move_goal_kcal / 0.04) : 10000;
+  const waterGoal = 2000; // ml/ngày
+  const daysWithWater = dayData.filter(d => d.water > 0);
+  const avgWater = daysWithWater.length
+    ? Math.round(daysWithWater.reduce((s, d) => s + d.water, 0) / daysWithWater.length)
+    : 0;
+
+  const insights = (() => {
+    const list: { emoji: string; color: string; text: string }[] = [];
+
+    // Steps insight
+    const stepGoalDays = daysWithSteps.filter(d => d.steps >= stepGoal).length;
+    if (daysWithSteps.length > 0) {
+      if (stepGoalDays === numDays)
+        list.push({ emoji: '🏆', color: '#4ADE80', text: `Xuất sắc! Bạn đạt mục tiêu bước chân cả ${numDays} ngày liên tiếp.` });
+      else if (stepGoalDays >= numDays / 2)
+        list.push({ emoji: '👟', color: '#FF914D', text: `Bạn đạt mục tiêu bước chân ${stepGoalDays}/${numDays} ngày. Cố thêm một chút!` });
+      else
+        list.push({ emoji: '⚠️', color: '#F87171', text: `Chỉ đạt mục tiêu bước chân ${stepGoalDays}/${numDays} ngày. Hãy vận động nhiều hơn!` });
+    }
+
+    // Sleep insight
+    if (daysWithSleep.length > 0) {
+      if (avgSleep >= 8)
+        list.push({ emoji: '😴', color: '#4ADE80', text: `Giấc ngủ tốt! Trung bình ${avgSleep.toFixed(1)}h/đêm — cơ thể đang được nghỉ ngơi đầy đủ.` });
+      else if (avgSleep >= 6)
+        list.push({ emoji: '🌙', color: '#FACC15', text: `Giấc ngủ trung bình ${avgSleep.toFixed(1)}h/đêm. Nên cố ngủ đủ 8 tiếng để tốt hơn.` });
+      else
+        list.push({ emoji: '😩', color: '#F87171', text: `Bạn đang thiếu ngủ nghiêm trọng! Trung bình chỉ ${avgSleep.toFixed(1)}h/đêm.` });
+    }
+
+    // Water insight
+    if (daysWithWater.length > 0) {
+      const goodWaterDays = daysWithWater.filter(d => d.water >= waterGoal).length;
+      if (goodWaterDays >= daysWithWater.length * 0.8)
+        list.push({ emoji: '💧', color: '#38BDF8', text: `Tuyệt vời! Bạn uống đủ 2L nước ${goodWaterDays}/${numDays} ngày. Giữ thói quen này!` });
+      else if (goodWaterDays > 0)
+        list.push({ emoji: '💧', color: '#7DD3FC', text: `Bạn đạt mục tiêu nước ${goodWaterDays}/${numDays} ngày. Hãy uống đủ 2L mỗi ngày!` });
+      else
+        list.push({ emoji: '🥤', color: '#F87171', text: `Bạn chưa đủ nước trong ${numDays} ngày qua. Hãy uống ít nhất 2L/ngày!` });
+    }
+
+    // Calories insight
+    if (avgCalories > 2500)
+      list.push({ emoji: '🍽️', color: '#F87171', text: `Lượng calo TB ${avgCalories} kcal/ngày — hơi cao, cân nhắc điều chỉnh khẩu phần ăn.` });
+    else if (avgCalories > 0 && avgCalories < 1200)
+      list.push({ emoji: '🍽️', color: '#FACC15', text: `Lượng calo TB ${avgCalories} kcal/ngày — có thể quá thấp. Hãy đảm bảo ăn đủ chất!` });
+    else if (avgCalories >= 1200 && avgCalories <= 2500 && daysWithCalories.length > 0)
+      list.push({ emoji: '✅', color: '#4ADE80', text: `Lượng calo trung bình ${avgCalories} kcal/ngày — đang trong mức hợp lý!` });
+
+    // Weight trend
+    if (weightPoints.length >= 2) {
+      const diff = weightPoints[weightPoints.length - 1].weight - weightPoints[0].weight;
+      if (Math.abs(diff) >= 0.3)
+        list.push({
+          emoji: diff < 0 ? '📉' : '📈',
+          color: diff < 0 ? '#4ADE80' : '#FACC15',
+          text: `Cân nặng ${diff < 0 ? 'giảm' : 'tăng'} ${Math.abs(diff).toFixed(1)} kg trong ${numDays} ngày qua.`,
+        });
+    }
+
+    return list;
+  })();
 
   /* ── bar chart helper ── */
   const renderBarChart = (
@@ -441,30 +518,41 @@ export default function StatsScreen() {
           </View>
         </View>
 
-        {/* Summary pills */}
-        <View className="flex-row px-5 mt-4 mb-5" style={{ gap: 10 }}>
-          <View className="flex-1 bg-[#1c1c1c] rounded-2xl p-4">
-            <MaterialCommunityIcons name="walk" size={20} color="#FF914D" />
-            <Text className="text-white text-xl font-black mt-2">
-              {totalSteps > 0 ? totalSteps.toLocaleString() : '--'}
-            </Text>
-            <Text className="text-gray-500 text-[10px] mt-0.5">bước / {numDays} ngày</Text>
+        {/* Summary pills — 2×2 grid */}
+        <View className="px-5 mt-4 mb-5" style={{ gap: 10 }}>
+          <View className="flex-row" style={{ gap: 10 }}>
+            <View className="flex-1 bg-[#1c1c1c] rounded-2xl p-4">
+              <MaterialCommunityIcons name="walk" size={20} color="#FF914D" />
+              <Text className="text-white text-xl font-black mt-2">
+                {totalSteps > 0 ? totalSteps.toLocaleString() : '--'}
+              </Text>
+              <Text className="text-gray-500 text-[10px] mt-0.5">bước / {numDays} ngày</Text>
+            </View>
+            <View className="flex-1 bg-[#1c1c1c] rounded-2xl p-4">
+              <MaterialCommunityIcons name="moon-waning-crescent" size={20} color="#8B5CF6" />
+              <Text className="text-white text-xl font-black mt-2">
+                {avgSleep > 0
+                  ? `${Math.floor(avgSleep)}h${Math.round((avgSleep % 1) * 60) > 0 ? Math.round((avgSleep % 1) * 60) + 'm' : ''}`
+                  : '--'}
+              </Text>
+              <Text className="text-gray-500 text-[10px] mt-0.5">ngủ TB / ngày</Text>
+            </View>
           </View>
-          <View className="flex-1 bg-[#1c1c1c] rounded-2xl p-4">
-            <MaterialCommunityIcons name="moon-waning-crescent" size={20} color="#8B5CF6" />
-            <Text className="text-white text-xl font-black mt-2">
-              {avgSleep > 0
-                ? `${Math.floor(avgSleep)}h${Math.round((avgSleep % 1) * 60) > 0 ? Math.round((avgSleep % 1) * 60) + 'm' : ''}`
-                : '--'}
-            </Text>
-            <Text className="text-gray-500 text-[10px] mt-0.5">ngủ TB / ngày</Text>
-          </View>
-          <View className="flex-1 bg-[#1c1c1c] rounded-2xl p-4">
-            <MaterialCommunityIcons name="fire" size={20} color="#EFFF3B" />
-            <Text className="text-white text-xl font-black mt-2">
-              {avgCalories > 0 ? avgCalories.toLocaleString() : '--'}
-            </Text>
-            <Text className="text-gray-500 text-[10px] mt-0.5">kcal TB / ngày</Text>
+          <View className="flex-row" style={{ gap: 10 }}>
+            <View className="flex-1 bg-[#1c1c1c] rounded-2xl p-4">
+              <MaterialCommunityIcons name="fire" size={20} color="#EFFF3B" />
+              <Text className="text-white text-xl font-black mt-2">
+                {avgCalories > 0 ? avgCalories.toLocaleString() : '--'}
+              </Text>
+              <Text className="text-gray-500 text-[10px] mt-0.5">kcal TB / ngày</Text>
+            </View>
+            <View className="flex-1 bg-[#1c1c1c] rounded-2xl p-4">
+              <MaterialCommunityIcons name="water" size={20} color="#38BDF8" />
+              <Text className="text-white text-xl font-black mt-2">
+                {avgWater > 0 ? `${avgWater}` : '--'}
+              </Text>
+              <Text className="text-gray-500 text-[10px] mt-0.5">ml nước TB / ngày</Text>
+            </View>
           </View>
         </View>
 
@@ -570,6 +658,49 @@ export default function StatsScreen() {
           </View>
         </View>
 
+        {/* Water chart */}
+        <View className="mx-5 bg-[#1c1c1c] rounded-3xl p-5 mb-4">
+          <View className="flex-row justify-between items-start mb-4">
+            <View>
+              <Text className="text-gray-400 text-xs mb-0.5">Uống nước</Text>
+              <Text className="text-white text-base font-bold">{numDays} ngày qua</Text>
+            </View>
+            <View className="items-end">
+              <Text className="text-gray-500 text-[10px]">Mục tiêu</Text>
+              <Text className="text-[#38BDF8] text-xs font-bold">{waterGoal.toLocaleString()} ml</Text>
+            </View>
+          </View>
+
+          {daysWithWater.length === 0 ? (
+            <View className="items-center py-8">
+              <MaterialCommunityIcons name="water-off" size={32} color="#333" />
+              <Text className="text-gray-600 text-sm mt-2">Chưa có dữ liệu trong kỳ này</Text>
+            </View>
+          ) : (
+            <>
+              {renderBarChart(
+                dayData.map(d => d.water),
+                labels,
+                Math.max(...dayData.map(d => d.water), waterGoal),
+                v => v >= waterGoal ? '#38BDF8' : v > 0 ? '#7DD3FC' : '#2a2a2a',
+                v => v >= 1000 ? `${(v / 1000).toFixed(1)}L` : `${v}ml`,
+                selectedWaterIdx,
+                setSelectedWaterIdx,
+              )}
+              <View className="flex-row mt-3" style={{ gap: 12 }}>
+                <View className="flex-row items-center">
+                  <View className="w-2 h-2 rounded-full bg-[#38BDF8] mr-1.5" />
+                  <Text className="text-gray-500 text-[10px]">Đạt 2L</Text>
+                </View>
+                <View className="flex-row items-center">
+                  <View className="w-2 h-2 rounded-full bg-[#7DD3FC] mr-1.5" />
+                  <Text className="text-gray-500 text-[10px]">Chưa đủ</Text>
+                </View>
+              </View>
+            </>
+          )}
+        </View>
+
         {/* Weight chart */}
         <View className="mx-5 bg-[#1c1c1c] rounded-3xl p-5 mb-4">
           <View className="flex-row justify-between items-center mb-4">
@@ -595,7 +726,7 @@ export default function StatsScreen() {
         </View>
 
         {/* Achievements */}
-        <View className="mx-5 bg-[#1c1c1c] rounded-3xl p-5">
+        <View className="mx-5 bg-[#1c1c1c] rounded-3xl p-5 mb-4">
           <Text className="text-white text-base font-bold mb-4">Thành tích {numDays} ngày</Text>
           <View style={{ gap: 10 }}>
             {[
@@ -620,6 +751,13 @@ export default function StatsScreen() {
                 active: daysWithCalories.length > 0,
                 color: '#EFFF3B',
               },
+              {
+                emoji: '💧',
+                title: `${daysWithWater.filter(d => d.water >= waterGoal).length} ngày đủ nước`,
+                sub:   `mục tiêu ${waterGoal.toLocaleString()}ml / ngày`,
+                active: daysWithWater.filter(d => d.water >= waterGoal).length > 0,
+                color: '#38BDF8',
+              },
             ].map(item => (
               <View
                 key={item.title}
@@ -638,6 +776,28 @@ export default function StatsScreen() {
             ))}
           </View>
         </View>
+
+        {/* Insights */}
+        {insights.length > 0 && (
+          <View className="mx-5 bg-[#1c1c1c] rounded-3xl p-5 mb-2">
+            <View className="flex-row items-center mb-4">
+              <Text className="text-white text-base font-bold flex-1">Nhận xét sức khoẻ</Text>
+              <MaterialCommunityIcons name="lightbulb-outline" size={20} color="#FACC15" />
+            </View>
+            <View style={{ gap: 10 }}>
+              {insights.map((item, idx) => (
+                <View
+                  key={idx}
+                  className="flex-row items-start rounded-2xl px-4 py-3"
+                  style={{ backgroundColor: item.color + '18' }}
+                >
+                  <Text style={{ fontSize: 18, marginTop: 1 }}>{item.emoji}</Text>
+                  <Text className="text-white text-sm leading-5 ml-3 flex-1">{item.text}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
+        )}
       </ScrollView>
     </SafeAreaView>
   );

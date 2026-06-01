@@ -36,11 +36,11 @@ const formatDuration = (hours: number) => {
   return `${h}h ${m}m`;
 };
 
-// Calculate overnight-aware duration in hours
+// Calculate overnight-aware duration in hours (max 24h)
 const calcDuration = (sleep: Date, wake: Date): number => {
   let diff = wake.getTime() - sleep.getTime();
   if (diff <= 0) diff += 24 * 60 * 60 * 1000;
-  return diff / (1000 * 60 * 60);
+  return Math.min(Math.max(diff / (1000 * 60 * 60), 0), 24);
 };
 
 const DAY_LABELS = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
@@ -199,6 +199,33 @@ export default function SleepDetailsScreen() {
     setShowWarningModal(false);
   };
 
+  const handleDelete = () => {
+    if (!existingId) return;
+    Alert.alert(
+      'Xoá bản ghi?',
+      'Bạn có chắc muốn xoá giấc ngủ hôm nay?',
+      [
+        { text: 'Huỷ', style: 'cancel' },
+        {
+          text: 'Xoá',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await supabase.from('sleep_records').delete().eq('id', existingId);
+              setExistingId(null);
+              setSleepTime(new Date(new Date().setHours(22, 0, 0, 0)));
+              setWakeTime(new Date(new Date().setHours(6, 0, 0, 0)));
+              fetchWeeklyData();
+              Alert.alert('Đã xoá', 'Bản ghi giấc ngủ đã được xoá.');
+            } catch (e: any) {
+              Alert.alert('Lỗi', e.message || 'Không thể xoá.');
+            }
+          },
+        },
+      ]
+    );
+  };
+
   // ─── Reminder: sync từ profile khi load ──────────────────────────────────
   useEffect(() => {
     if (profile?.sleep_reminder_time) {
@@ -279,18 +306,29 @@ export default function SleepDetailsScreen() {
           <MaterialCommunityIcons name="chevron-left" size={32} color={SLEEP_COLOR} />
         </TouchableOpacity>
         <Text className="text-white text-base font-bold">Theo dõi giấc ngủ</Text>
-        <TouchableOpacity
-          onPress={handleSavePress}
-          disabled={isSaving}
-          className="px-4 py-1.5 rounded-full"
-          style={{ backgroundColor: SLEEP_COLOR }}
-        >
-          {isSaving ? (
-            <ActivityIndicator color="#fff" size="small" />
-          ) : (
-            <Text className="text-white font-semibold text-sm">Lưu</Text>
+        <View className="flex-row items-center" style={{ gap: 8 }}>
+          {existingId && (
+            <TouchableOpacity
+              onPress={handleDelete}
+              className="w-8 h-8 rounded-full items-center justify-center"
+              style={{ backgroundColor: '#F8717122' }}
+            >
+              <MaterialCommunityIcons name="trash-can-outline" size={18} color="#F87171" />
+            </TouchableOpacity>
           )}
-        </TouchableOpacity>
+          <TouchableOpacity
+            onPress={handleSavePress}
+            disabled={isSaving}
+            className="px-4 py-1.5 rounded-full"
+            style={{ backgroundColor: SLEEP_COLOR }}
+          >
+            {isSaving ? (
+              <ActivityIndicator color="#fff" size="small" />
+            ) : (
+              <Text className="text-white font-semibold text-sm">Lưu</Text>
+            )}
+          </TouchableOpacity>
+        </View>
       </View>
 
       <ScrollView className="flex-1" showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>

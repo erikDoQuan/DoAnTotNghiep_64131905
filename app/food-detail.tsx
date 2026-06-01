@@ -187,8 +187,8 @@ export default function FoodDetailScreen() {
                 <Text className="text-white text-lg font-bold">{calculated.fat}g</Text>
               </View>
               <View className="flex-row justify-between pt-1 opacity-60">
-                <Text className="text-white ml-4">Béo bão hoà</Text>
-                <Text className="text-white">{(parseFloat(calculated.fat) * 0.3).toFixed(1)}g</Text>
+                <Text className="text-white ml-4">Béo bão hoà *</Text>
+                <Text className="text-white">~{(parseFloat(calculated.fat) * 0.3).toFixed(1)}g</Text>
               </View>
             </View>
 
@@ -198,12 +198,12 @@ export default function FoodDetailScreen() {
                 <Text className="text-white text-lg font-bold">{calculated.carbs}g</Text>
               </View>
               <View className="flex-row justify-between pt-1 opacity-60">
-                <Text className="text-white ml-4">Đường</Text>
-                <Text className="text-white">{(parseFloat(calculated.carbs) * 0.5).toFixed(0)}g</Text>
+                <Text className="text-white ml-4">Đường *</Text>
+                <Text className="text-white">~{(parseFloat(calculated.carbs) * 0.5).toFixed(0)}g</Text>
               </View>
               <View className="flex-row justify-between pt-1 opacity-60">
-                <Text className="text-white ml-4">Chất xơ</Text>
-                <Text className="text-white">{(parseFloat(calculated.carbs) * 0.1).toFixed(1)}g</Text>
+                <Text className="text-white ml-4">Chất xơ *</Text>
+                <Text className="text-white">~{(parseFloat(calculated.carbs) * 0.1).toFixed(1)}g</Text>
               </View>
             </View>
 
@@ -214,13 +214,10 @@ export default function FoodDetailScreen() {
 
             <View className="flex-row justify-between border-b border-gray-800 pb-2">
               <Text className="text-white text-lg font-bold">Natri</Text>
-              <Text className="text-white">1mg</Text>
+              <Text className="text-gray-500">Chưa có dữ liệu</Text>
             </View>
 
-            <View className="flex-row justify-between border-b border-gray-800 pb-2">
-              <Text className="text-white text-lg font-bold">Kali</Text>
-              <Text className="text-white">{(parseFloat(calculated.carbs) * 15).toFixed(0)}mg</Text>
-            </View>
+            <Text className="text-gray-600 text-[10px] mt-2">* Giá trị ước tính, không phải dữ liệu thực tế</Text>
           </View>
         </View>
       </ScrollView>

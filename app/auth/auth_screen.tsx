@@ -6,6 +6,7 @@ import { useState } from 'react';
 import { Alert, KeyboardAvoidingView, Platform, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../../contexts/AuthContext';
+import { supabase } from '../../supabase/supabaseClient';
 
 export default function AuthScreen() {
   const { signIn, signUp } = useAuth();
@@ -19,10 +20,33 @@ export default function AuthScreen() {
   const [rememberMe, setRememberMe] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
+  const handleForgotPassword = async () => {
+    if (!email) {
+      setErrorMsg('Vui lòng nhập email trước khi đặt lại mật khẩu');
+      return;
+    }
+    setIsLoading(true);
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email);
+      if (error) {
+        setErrorMsg(error.message);
+      } else {
+        Alert.alert(
+          'Email đã gửi ✉️',
+          `Kiểm tra hộp thư ${email} và làm theo hướng dẫn để đặt lại mật khẩu.`
+        );
+      }
+    } catch (e: any) {
+      setErrorMsg(e.message || 'Lỗi gửi email');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleAuth = async () => {
     setErrorMsg('');
     if (!email || !password) {
-      setErrorMsg('Please enter email and password');
+      setErrorMsg('Vui lòng nhập email và mật khẩu');
       return;
     }
 
@@ -34,12 +58,12 @@ export default function AuthScreen() {
         if (error) setErrorMsg(error.message);
       } else {
         if (!name) {
-          setErrorMsg('Please enter your name');
+          setErrorMsg('Vui lòng nhập họ tên');
           setIsLoading(false);
           return;
         }
         if (password !== confirmPassword) {
-          setErrorMsg('Passwords do not match');
+          setErrorMsg('Mật khẩu xác nhận không khớp');
           setIsLoading(false);
           return;
         }
@@ -47,7 +71,7 @@ export default function AuthScreen() {
         if (error) {
           setErrorMsg(error.message);
         } else {
-          Alert.alert("Success", "Account created successfully! You can now log in.");
+          Alert.alert("Đăng ký thành công", "Tài khoản đã được tạo. Vui lòng đăng nhập.");
           setIsLogin(true); // Switch to login tab
         }
       }
@@ -70,7 +94,7 @@ export default function AuthScreen() {
           {/* Header Text */}
           <View className="mb-8 items-center">
             <Text className="text-text-primary text-3xl font-bold text-center">
-              {isLogin ? 'Sign Up or Log in to\nBuild Habits' : 'Sign Up, Track Your\nProgress Daily!'}
+              {isLogin ? 'Đăng nhập để\ntheo dõi sức khoẻ' : 'Đăng ký và bắt đầu\nhành trình khoẻ mạnh!'}
             </Text>
           </View>
 
@@ -83,7 +107,7 @@ export default function AuthScreen() {
                 setErrorMsg('');
               }}
             >
-              <Text className={`text-center font-medium ${isLogin ? 'text-text-primary' : 'text-text-secondary'}`}>Log in</Text>
+              <Text className={`text-center font-medium ${isLogin ? 'text-text-primary' : 'text-text-secondary'}`}>Đăng nhập</Text>
             </TouchableOpacity>
             <TouchableOpacity
               className={`flex-1 py-3 rounded-full ${!isLogin ? 'bg-border-default' : 'bg-transparent'}`}
@@ -92,7 +116,7 @@ export default function AuthScreen() {
                 setErrorMsg('');
               }}
             >
-              <Text className={`text-center font-medium ${!isLogin ? 'text-text-primary' : 'text-text-secondary'}`}>Sign up</Text>
+              <Text className={`text-center font-medium ${!isLogin ? 'text-text-primary' : 'text-text-secondary'}`}>Đăng ký</Text>
             </TouchableOpacity>
           </View>
 
@@ -101,7 +125,7 @@ export default function AuthScreen() {
             {!isLogin && (
               <AppTextInput
                 icon="account-outline"
-                placeholder="Name"
+                placeholder="Họ và tên"
                 value={name}
                 onChangeText={setName}
                 editable={!isLoading}
@@ -110,7 +134,7 @@ export default function AuthScreen() {
 
             <AppTextInput
               icon="email-outline"
-              placeholder="Email Address"
+              placeholder="Địa chỉ email"
               keyboardType="email-address"
               autoCapitalize="none"
               value={email}
@@ -120,7 +144,7 @@ export default function AuthScreen() {
 
             <AppTextInput
               icon="lock-outline"
-              placeholder="Password"
+              placeholder="Mật khẩu"
               isPassword
               value={password}
               onChangeText={setPassword}
@@ -130,7 +154,7 @@ export default function AuthScreen() {
             {!isLogin && (
               <AppTextInput
                 icon="lock-outline"
-                placeholder="Confirm Password"
+                placeholder="Xác nhận mật khẩu"
                 isPassword
                 value={confirmPassword}
                 onChangeText={setConfirmPassword}
@@ -153,19 +177,19 @@ export default function AuthScreen() {
               <View className={`w-5 h-5 border rounded flex items-center justify-center mr-2 ${rememberMe ? 'bg-text-muted border-text-muted' : 'border-text-secondary'}`}>
                 {rememberMe && <MaterialCommunityIcons name="check" size={14} color="#0a0a0a" />}
               </View>
-              <Text className="text-text-muted">Remember me</Text>
+              <Text className="text-text-muted">Ghi nhớ đăng nhập</Text>
             </TouchableOpacity>
 
             {isLogin && (
-              <TouchableOpacity disabled={isLoading}>
-                <Text className="text-text-muted">Forgot password</Text>
+              <TouchableOpacity onPress={handleForgotPassword} disabled={isLoading}>
+                <Text className="text-brand-primary font-medium">Quên mật khẩu?</Text>
               </TouchableOpacity>
             )}
           </View>
 
           {/* Primary Action Button */}
           <AppButton
-            title={isLogin ? 'Login' : 'Sign up'}
+            title={isLogin ? 'Đăng nhập' : 'Đăng ký'}
             onPress={handleAuth}
             isLoading={isLoading}
             className="mb-8"
@@ -175,7 +199,7 @@ export default function AuthScreen() {
           <View className="mb-8">
             <View className="flex-row items-center justify-center mb-6">
               <View className="h-[1px] bg-border-default flex-1" />
-              <Text className="text-text-secondary px-4 font-medium">Or login with</Text>
+              <Text className="text-text-secondary px-4 font-medium">Hoặc đăng nhập với</Text>
               <View className="h-[1px] bg-border-default flex-1" />
             </View>
 
@@ -195,7 +219,7 @@ export default function AuthScreen() {
           {/* Footer Link */}
           <View className="flex-row justify-center mt-auto">
             <Text className="text-text-secondary">
-              {isLogin ? "Dont have an account ? " : "Already have an account? "}
+              {isLogin ? 'Chưa có tài khoản? ' : 'Đã có tài khoản? '}
             </Text>
             <TouchableOpacity
               onPress={() => {
@@ -205,7 +229,7 @@ export default function AuthScreen() {
               disabled={isLoading}
             >
               <Text className="text-brand-primary font-bold">
-                {isLogin ? "Create an account" : "Log in"}
+                {isLogin ? 'Tạo tài khoản' : 'Đăng nhập'}
               </Text>
             </TouchableOpacity>
           </View>

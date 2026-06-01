@@ -31,22 +31,22 @@ export default function OnboardingScreen() {
     const weightNum = parseFloat(weight);
 
     if (!fullName.trim()) {
-      setErrorMsg('Please enter your full name');
+      setErrorMsg('Vui lòng nhập họ và tên');
       return;
     }
 
     if (!gender) {
-      setErrorMsg('Please select your gender');
+      setErrorMsg('Vui lòng chọn giới tính');
       return;
     }
 
     if (!/^\d{4}-\d{2}-\d{2}$/.test(birthDate)) {
-      setErrorMsg('Please enter birth date in YYYY-MM-DD format');
+      setErrorMsg('Nhập ngày sinh theo định dạng YYYY-MM-DD');
       return;
     }
 
-    if (isNaN(heightNum) || isNaN(weightNum)) {
-      setErrorMsg('Please enter valid numbers for Height and Weight');
+    if (isNaN(heightNum) || isNaN(weightNum) || heightNum <= 0 || weightNum <= 0) {
+      setErrorMsg('Vui lòng nhập chiều cao và cân nặng hợp lệ');
       return;
     }
 
@@ -74,7 +74,7 @@ export default function OnboardingScreen() {
         await refreshProfile();
       }
     } catch (error: any) {
-      setErrorMsg(error.message || 'An unexpected error occurred');
+      setErrorMsg(error.message || 'Đã xảy ra lỗi, vui lòng thử lại');
     } finally {
       setIsLoading(false);
     }
@@ -99,17 +99,17 @@ export default function OnboardingScreen() {
         <ScrollView contentContainerStyle={{ flexGrow: 1 }} className="px-6 py-12">
 
           <View className="mb-10 items-center">
-            <Text className="text-brand-primary text-4xl font-bold mb-2">Welcome!</Text>
+            <Text className="text-brand-primary text-4xl font-bold mb-2">Chào mừng!</Text>
             <Text className="text-text-secondary text-center text-lg">
-              Let's complete your profile to give you the best experience.
+              Hãy hoàn thiện hồ sơ để chúng tôi cá nhân hoá trải nghiệm của bạn.
             </Text>
           </View>
 
           <View className="mb-8">
-            <Text className="text-text-primary text-base font-medium mb-3 ml-1">Full Name</Text>
+            <Text className="text-text-primary text-base font-medium mb-3 ml-1">Họ và tên</Text>
             <AppTextInput
               icon="account-outline"
-              placeholder="Your Full Name"
+              placeholder="Nhập họ và tên của bạn"
               value={fullName}
               onChangeText={setFullName}
               editable={!isLoading}
@@ -117,16 +117,16 @@ export default function OnboardingScreen() {
             />
 
             <View className="mb-8">
-              <Text className="text-text-primary text-base font-medium mb-4 ml-1">Gender</Text>
+              <Text className="text-text-primary text-base font-medium mb-4 ml-1">Giới tính</Text>
               <View className="flex-row" style={{ gap: 16 }}>
-                <GenderOption label="Male" value="Male" />
-                <GenderOption label="Female" value="Female" />
-                <GenderOption label="Other" value="Other" />
+                <GenderOption label="Nam" value="Male" />
+                <GenderOption label="Nữ" value="Female" />
+                <GenderOption label="Khác" value="Other" />
               </View>
             </View>
 
             <View className="mb-8">
-              <Text className="text-text-primary text-base font-medium mb-3 ml-1">Birth Date</Text>
+              <Text className="text-text-primary text-base font-medium mb-3 ml-1">Ngày sinh</Text>
               <AppTextInput
                 icon="calendar-outline"
                 placeholder="YYYY-MM-DD"
@@ -138,10 +138,10 @@ export default function OnboardingScreen() {
 
             <View className="flex-row mb-4" style={{ gap: 16 }}>
               <View className="flex-1">
-                <Text className="text-text-primary text-base font-medium mb-3 ml-1">Height (cm)</Text>
+                <Text className="text-text-primary text-base font-medium mb-3 ml-1">Chiều cao (cm)</Text>
                 <AppTextInput
                   icon="human-male-height"
-                  placeholder="e.g. 175"
+                  placeholder="VD: 175"
                   keyboardType="numeric"
                   value={height}
                   onChangeText={setHeight}
@@ -149,10 +149,10 @@ export default function OnboardingScreen() {
                 />
               </View>
               <View className="flex-1">
-                <Text className="text-text-primary text-base font-medium mb-3 ml-1">Weight (kg)</Text>
+                <Text className="text-text-primary text-base font-medium mb-3 ml-1">Cân nặng (kg)</Text>
                 <AppTextInput
                   icon="weight-kilogram"
-                  placeholder="e.g. 70"
+                  placeholder="VD: 70"
                   keyboardType="numeric"
                   value={weight}
                   onChangeText={setWeight}
@@ -167,7 +167,7 @@ export default function OnboardingScreen() {
           </View>
 
           <AppButton
-            title="Finish Setup"
+            title="Hoàn tất thiết lập"
             onPress={handleFinishSetup}
             isLoading={isLoading}
             className="mt-2 mb-10"

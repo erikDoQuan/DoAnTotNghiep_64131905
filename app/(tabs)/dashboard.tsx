@@ -5,7 +5,6 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Pedometer } from 'expo-sensors';
-import { testNotification } from '../../utils/notificationHelper';
 import * as Haptics from 'expo-haptics';
 import { Alert, ActivityIndicator, Modal, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import ConfettiCelebration from '../../components/ConfettiCelebration';
@@ -85,6 +84,38 @@ export default function DashboardScreen() {
     };
     loadWaterData();
   }, []);
+
+  // Sync confirmed water glasses to DB whenever the count changes
+  useEffect(() => {
+    if (!user) return;
+    const today = new Date().toISOString().split('T')[0];
+    void supabase.from('water_records').upsert(
+      {
+        user_id: user.id,
+        record_date: today,
+        ml_consumed: confirmedGlasses * waterMlPerGlass,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'user_id,record_date' }
+    );
+  }, [confirmedGlasses, user, waterMlPerGlass, waterReminderCount]);
+
+  // Load water from DB on mount as fallback (e.g. after reinstall)
+  useEffect(() => {
+    if (!user) return;
+    const today = new Date().toISOString().split('T')[0];
+    supabase
+      .from('water_records')
+      .select('ml_consumed')
+      .eq('user_id', user.id)
+      .eq('record_date', today)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (data?.ml_consumed && waterMlPerGlass > 0) {
+          setConfirmedGlasses(prev => Math.max(prev, Math.round(data.ml_consumed / waterMlPerGlass)));
+        }
+      }, () => {});
+  }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Show water reminder popup at each scheduled time (only if enabled in settings)
   useEffect(() => {
@@ -351,11 +382,31 @@ export default function DashboardScreen() {
   const breakfastSummary = getMealSummary('breakfast');
   const lunchSummary = getMealSummary('lunch');
   const dinnerSummary = getMealSummary('dinner');
+  const snackSummary = getMealSummary('snack');
 
   const totalCaloriesToday = (meals || []).reduce((sum, m) => sum + (Number(m.calories) || 0), 0);
   const totalFatToday = (meals || []).reduce((sum, m) => sum + (Number(m.fat) || 0), 0);
   const totalCarbsToday = (meals || []).reduce((sum, m) => sum + (Number(m.carbs) || 0), 0);
   const totalProteinToday = (meals || []).reduce((sum, m) => sum + (Number(m.protein) || 0), 0);
+
+  // BMR-based daily calorie goal (Harris-Benedict × 1.55 activity)
+  const calorieGoal = (() => {
+    if (!profile?.height_cm || !profile?.weight_kg) return 2000;
+    const age = profile.birth_date
+      ? Math.floor((Date.now() - new Date(profile.birth_date).getTime()) / (365.25 * 24 * 3600 * 1000))
+      : 25;
+    const isMale = (profile.gender || '').toLowerCase() !== 'female';
+    const bmr = isMale
+      ? 88.362 + 13.397 * profile.weight_kg + 4.799 * profile.height_cm - 5.677 * age
+      : 447.593 + 9.247 * profile.weight_kg + 3.098 * profile.height_cm - 4.330 * age;
+    return Math.round(bmr * 1.55);
+  })();
+  const stepLengthCm = (profile?.gender || '').toLowerCase() === 'female'
+    ? (profile?.height_cm || 165) * 0.413
+    : (profile?.height_cm || 175) * 0.415;
+  const calsBurned = Math.round((profile?.weight_kg || 70) * (stepsToday * stepLengthCm / 100000) * 0.75);
+  const calsRemaining = calorieGoal + calsBurned - Math.round(totalCaloriesToday);
+  const calsProgress = calorieGoal > 0 ? Math.min(totalCaloriesToday / calorieGoal, 1) : 0;
 
   // Calculate the current week based on currentWeekBase
   const getWeekDays = () => {
@@ -444,16 +495,16 @@ export default function DashboardScreen() {
             </View>
           </View>
           <View className="flex-row items-center">
-            <TouchableOpacity 
-              onPress={() => testNotification()}
-              className="w-10 h-10 rounded-xl bg-status-info/10 items-center justify-center shadow-sm mr-2"
+            <TouchableOpacity
+              onPress={() => router.push('/(tabs)/explore')}
+              className="w-10 h-10 rounded-xl bg-dashboard-card items-center justify-center shadow-sm mr-2"
             >
-              <MaterialCommunityIcons name="bell-ring-outline" size={20} color="#38BDF8" />
-            </TouchableOpacity>
-            <TouchableOpacity className="w-10 h-10 rounded-xl bg-dashboard-card items-center justify-center shadow-sm mr-2">
               <MaterialCommunityIcons name="calendar-month-outline" size={20} color="black" />
             </TouchableOpacity>
-            <TouchableOpacity className="w-10 h-10 rounded-xl bg-dashboard-card items-center justify-center shadow-sm relative">
+            <TouchableOpacity
+              onPress={() => router.push('/notifications')}
+              className="w-10 h-10 rounded-xl bg-dashboard-card items-center justify-center shadow-sm relative"
+            >
               <MaterialCommunityIcons name="bell-outline" size={20} color="black" />
               <View className="absolute top-2 right-2 w-2 h-2 bg-status-success rounded-full border-2 border-white" />
             </TouchableOpacity>
@@ -461,28 +512,45 @@ export default function DashboardScreen() {
         </View>
 
 
-        {/* Weekly Progress Card */}
-        <TouchableOpacity className="bg-dashboard-accent-green rounded-3xl p-6 mb-4 flex-row justify-between items-center">
-          <View className="flex-1 pr-4">
-            <View className="flex-row items-center mb-1">
-              <View className="w-6 h-6 rounded-full bg-white/40 items-center justify-center mr-2">
-                <MaterialCommunityIcons name="flash" size={14} color="black" />
+        {/* Calorie Overview Card */}
+        <View className="bg-dashboard-accent-green rounded-3xl p-5 mb-4">
+          <View className="flex-row justify-between items-center mb-4">
+            <View className="flex-1 pr-4">
+              <View className="flex-row items-center mb-1">
+                <View className="w-6 h-6 rounded-full bg-white/40 items-center justify-center mr-2">
+                  <MaterialCommunityIcons name="flash" size={14} color="black" />
+                </View>
+                <Text className="text-black text-xs font-medium">Calo hôm nay</Text>
               </View>
-              <Text className="text-black text-xs font-medium">Calo hôm nay</Text>
+              <Text className="text-black text-3xl font-black">{Math.round(totalCaloriesToday)}</Text>
+              <Text className="text-black/60 text-xs mt-0.5">/ {calorieGoal} kcal mục tiêu</Text>
             </View>
-            <Text className="text-black text-[24px] font-bold leading-tight">Tiến độ{"\n"}tuần này</Text>
-          </View>
-
-          <View className="relative items-center justify-center">
-            <View className="w-24 h-24 rounded-full border-[8px] border-white/30 items-center justify-center">
-              <View className="items-center">
-                <Text className="text-black text-2xl font-bold">{(totalCaloriesToday || 0).toFixed(0)}</Text>
-                <Text className="text-black/60 text-[10px]">kcal</Text>
+            <View className="relative items-center justify-center">
+              <View className="w-20 h-20 rounded-full border-[7px] border-white/30 items-center justify-center">
+                <Text className="text-black text-base font-black">{Math.round(calsProgress * 100)}%</Text>
               </View>
+              <View className="absolute w-20 h-20 rounded-full border-[7px] border-transparent border-t-dashboard-accent-progress border-r-dashboard-accent-progress rotate-[45deg]" />
             </View>
-            <View className="absolute w-24 h-24 rounded-full border-[8px] border-transparent border-t-dashboard-accent-progress border-r-dashboard-accent-progress rotate-[45deg]" />
           </View>
-        </TouchableOpacity>
+          <View className="flex-row bg-white/25 rounded-2xl p-3" style={{ gap: 0 }}>
+            <View className="flex-1 items-center">
+              <Text className="text-black/60 text-[10px] mb-0.5">Đã ăn</Text>
+              <Text className="text-black font-bold text-sm">{Math.round(totalCaloriesToday)} kcal</Text>
+            </View>
+            <View className="w-[1px] bg-white/30 mx-2" />
+            <View className="flex-1 items-center">
+              <Text className="text-black/60 text-[10px] mb-0.5">Đã đốt</Text>
+              <Text className="text-black font-bold text-sm">{calsBurned} kcal</Text>
+            </View>
+            <View className="w-[1px] bg-white/30 mx-2" />
+            <View className="flex-1 items-center">
+              <Text className="text-black/60 text-[10px] mb-0.5">Còn lại</Text>
+              <Text className={`font-bold text-sm ${calsRemaining >= 0 ? 'text-black' : 'text-red-700'}`}>
+                {calsRemaining} kcal
+              </Text>
+            </View>
+          </View>
+        </View>
 
         {/* Status Grid */}
         <View className="flex-row justify-between mb-6">
@@ -683,6 +751,7 @@ export default function DashboardScreen() {
               { key: 'breakfast', label: 'Bữa sáng', param: 'Breakfast', summary: breakfastSummary },
               { key: 'lunch',     label: 'Bữa trưa', param: 'Lunch',     summary: lunchSummary    },
               { key: 'dinner',    label: 'Bữa tối',  param: 'Dinner',    summary: dinnerSummary   },
+              { key: 'snack',     label: 'Bữa phụ',  param: 'Snack',     summary: snackSummary    },
             ] as const
           ).map(({ key, label, param, summary }) => (
             <View key={key} className="bg-dashboard-card rounded-2xl p-4 mb-3 shadow-sm">
